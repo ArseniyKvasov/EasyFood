@@ -134,20 +134,25 @@ curl -s http://127.0.0.1:8080/api/health
 
 ---
 
-## 5. nginx
+## 5. nginx (сначала только HTTP)
+
+На этом шаге ставим конфиг **без HTTPS** — полный конфиг ссылается на сертификат
+Let's Encrypt, которого ещё нет, и nginx не сможет запуститься.
 
 ```bash
 apt install -y nginx
-cp deploy/nginx/food.fastclass.online.conf /etc/nginx/sites-available/food.fastclass.online
-ln -s /etc/nginx/sites-available/food.fastclass.online /etc/nginx/sites-enabled/
+mkdir -p /var/www/certbot
+cp deploy/nginx/food.fastclass.online.http.conf /etc/nginx/sites-available/food.fastclass.online
+ln -sf /etc/nginx/sites-available/food.fastclass.online /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
 
-Конфиг (`deploy/nginx/food.fastclass.online.conf`) делает две вещи:
+Проверка, что nginx работает и проксирует приложение:
 
-- на `:80` — ACME-challenge для выпуска сертификата и проксирование;
-- на `:443` — основной прокси с длинным таймаутом (нужно для распознавания по фото).
+```bash
+curl -I http://food.fastclass.online
+```
 
 ---
 
@@ -161,6 +166,23 @@ apt install -y certbot python3-certbot-nginx
 certbot --nginx -d food.fastclass.online --agree-tos -m admin@fastclass.online --redirect
 systemctl enable --now certbot.timer
 ```
+
+---
+
+## 7. Полный конфиг nginx (HTTP + HTTPS)
+
+Теперь сертификат существует — включаем HTTPS:
+
+```bash
+cd /opt/EasyFood
+cp deploy/nginx/food.fastclass.online.conf /etc/nginx/sites-available/food.fastclass.online
+nginx -t && systemctl reload nginx
+```
+
+Полный конфиг (`deploy/nginx/food.fastclass.online.conf`) делает две вещи:
+
+- на `:80` — ACME-challenge для выпуска сертификата и редирект на HTTPS;
+- на `:443` — основной прокси с длинным таймаутом (нужно для распознавания по фото).
 
 Автопродление:
 
@@ -182,7 +204,7 @@ curl -I https://food.fastclass.online
 
 ---
 
-## 7. Firewall
+## 8. Firewall
 
 ```bash
 ufw allow 22/tcp
@@ -196,7 +218,7 @@ Postgres наружу не открывается — он живёт во вн�
 
 ---
 
-## 8. Обновление проекта
+## 9. Обновление проекта
 
 ```bash
 cd /opt/EasyFood
@@ -209,7 +231,7 @@ docker image prune -f
 
 ---
 
-## 9. Бэкапы
+## 10. Бэкапы
 
 ```bash
 # Дамп базы
@@ -227,7 +249,7 @@ gunzip -c backup-2026-10-21.sql.gz | docker compose exec -T db psql -U easyfood 
 
 ---
 
-## 10. Обслуживание
+## 11. Обслуживание
 
 ```bash
 docker compose logs -f app       # логи приложения
