@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { api } from '../api';
 import { num } from '../lib/format';
 import type { Product } from '../types';
 import { IconPencil, IconTrash } from './Icons';
@@ -23,8 +24,29 @@ export function GramsSheet({
   onEditProduct,
 }: Props) {
   const [grams, setGrams] = useState(initialGrams);
+  const [remembered, setRemembered] = useState<number[]>([]);
 
   useEffect(() => setGrams(initialGrams), [initialGrams, product.id]);
+
+  // Веса, с которыми этот продукт добавляли раньше, — предлагаем их первыми.
+  useEffect(() => {
+    if (product.id <= 0) {
+      setRemembered([]);
+      return;
+    }
+    let alive = true;
+    api
+      .getPortions(product.id)
+      .then((r) => {
+        if (alive) setRemembered(r.portions.map((p) => p.grams));
+      })
+      .catch(() => {
+        if (alive) setRemembered([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [product.id]);
 
   const value = useMemo(() => {
     const k = grams / 100;
@@ -36,13 +58,26 @@ export function GramsSheet({
     };
   }, [grams, product]);
 
-  const presets = useMemo(
-    () =>
-      [...new Set([product.servingG, 50, 100, 150, 200, 250].filter((v) => v > 0))].sort(
-        (a, b) => a - b,
-      ),
-    [product.servingG],
-  );
+  /**
+   * Не больше пяти вариантов: сначала те веса, которые пользователь уже
+   * использовал (самые частые — первыми), затем стандартная порция
+   * продукта и круглые значения.
+   */
+  const presets = useMemo(() => {
+    const MAX = 5;
+    const out: number[] = [];
+    const push = (v: number) => {
+      if (out.length >= MAX) return;
+      if (!(v > 0)) return;
+      if (out.some((x) => Math.abs(x - v) < 0.5)) return;
+      out.push(v);
+    };
+
+    remembered.forEach(push);
+    [product.servingG, 50, 100, 150, 200, 250].forEach(push);
+
+    return [...out].sort((a, b) => a - b);
+  }, [remembered, product.servingG]);
 
   const editing = entryId !== null;
 

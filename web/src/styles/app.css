@@ -649,6 +649,8 @@ h6 {
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1;
+  /* Без min-height:0 flex-ребёнок не сжимается, и вместо body скроллится вся модалка */
+  min-height: 0;
 }
 .modal-backdrop.show {
   opacity: var(--bs-backdrop-opacity);
@@ -665,6 +667,17 @@ h6 {
   opacity: 1;
 }
 
+/* Закреплённый низ модалки: остаётся на месте, пока прокручивается body */
+.modal-footer-sticky {
+  position: sticky;
+  bottom: -1.5rem;
+  z-index: 2;
+  margin: 0.9rem -1.25rem -1.5rem;
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom));
+  background-color: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
 @media (max-width: 767.98px) {
   .modal {
     --bs-modal-margin: 0;
@@ -676,7 +689,9 @@ h6 {
     display: flex;
     align-items: flex-end;
   }
-  .modal.fade .modal-dialog {
+  /* Пока модалка не показана — уезжает вниз. Селектор с :not(.show)
+     иначе перебивал бы transform:none из .modal.show (одинаковая специфичность). */
+  .modal.fade:not(.show) .modal-dialog {
     transform: translateY(100%);
   }
   .modal-content {
@@ -689,6 +704,9 @@ h6 {
   .modal-body {
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+  .modal-footer-sticky {
+    bottom: -1.5rem;
   }
 }
 
@@ -842,8 +860,10 @@ h6 {
 .scanner video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* contain, а не cover: обрезка кадра прячет края штрихкода и ломает распознавание */
+  object-fit: contain;
   display: block;
+  background: #0a0f0a;
 }
 .scanner__frame {
   position: absolute;
@@ -1269,6 +1289,17 @@ h6 {
 }
 
 @media (max-width: 575.98px) {
+  /* Safari на iPhone зумит страницу при фокусе в поле, если шрифт меньше 16px */
+  input,
+  textarea,
+  select,
+  .form-control,
+  .form-select {
+    font-size: 16px;
+  }
+  .btn {
+    touch-action: manipulation;
+  }
   .topbar__grid {
     gap: 0.4rem;
   }

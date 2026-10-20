@@ -42,6 +42,30 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     return mapProduct(row);
   });
 
+  /** Привычные порции пользователя для этого продукта — по убыванию частоты. */
+  app.get('/api/products/:id/portions', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'BAD_ID' });
+
+    const product = await one<ProductRow>(
+      `SELECT ${PRODUCT_COLUMNS} FROM products
+        WHERE id = $1 AND (user_id IS NULL OR user_id = $2)`,
+      [id, req.user!.id],
+    );
+    if (!product) return reply.code(404).send({ error: 'NOT_FOUND' });
+
+    const rows = await query<{ grams: string; uses: string }>(
+      `SELECT grams, uses FROM product_portions
+        WHERE user_id = $1 AND product_id = $2
+        ORDER BY uses DESC, updated_at DESC
+        LIMIT 10`,
+      [req.user!.id, id],
+    );
+    return {
+      portions: rows.map((r) => ({ grams: Number(r.grams), uses: Number(r.uses) })),
+    };
+  });
+
   app.post('/api/products', async (req, reply) => {
     const body = productBody.safeParse(req.body);
     if (!body.success) {

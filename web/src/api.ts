@@ -74,6 +74,9 @@ export const api = {
 
   getProduct: (id: number) => request<Product>(`/api/products/${id}`),
 
+  getPortions: (id: number) =>
+    request<{ portions: { grams: number; uses: number }[] }>(`/api/products/${id}/portions`),
+
   getRemoteProducts: (q: string) =>
     request<{ products: Product[] }>(`/api/products/remote?q=${encodeURIComponent(q)}`),
 

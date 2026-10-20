@@ -63,6 +63,32 @@ const ENTRY_SELECT = `
   fat100::float8 AS fat100,
   carbs100::float8 AS carbs100`;
 
+/**
+ * Запоминает, с каким весом пользователь добавил продукт — чтобы в следующий раз
+ * предложить этот вес готовым вариантом.
+ */
+async function rememberPortion(userId: number, productId: number | null, grams: number): Promise<void> {
+  if (!productId) return;
+  await query(
+    `INSERT INTO product_portions (user_id, product_id, grams, uses, updated_at)
+     VALUES ($1, $2, $3, 1, now())
+     ON CONFLICT (user_id, product_id, grams)
+     DO UPDATE SET uses = product_portions.uses + 1, updated_at = now()`,
+    [userId, productId, grams],
+  );
+  // Не даём таблице расти бесконечно: оставляем 20 самых частых весов.
+  await query(
+    `DELETE FROM product_portions
+      WHERE user_id = $1 AND product_id = $2
+        AND grams NOT IN (
+          SELECT grams FROM product_portions
+           WHERE user_id = $1 AND product_id = $2
+           ORDER BY uses DESC, updated_at DESC LIMIT 20
+        )`,
+    [userId, productId],
+  );
+}
+
 export async function diaryRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/diary', async (req) => {
     const parsed = dateSchema.safeParse((req.query as { date?: string }).date ?? '');
@@ -113,6 +139,7 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
     if (productId) {
       await query(`UPDATE products SET use_count = use_count + 1 WHERE id = $1`, [productId]);
     }
+    await rememberPortion(userId, productId ?? null, grams);
     return reply.code(201).send({ id: Number(rows[0].id) });
   });
 
@@ -140,6 +167,11 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
       id,
       req.user!.id,
     ]);
+    await rememberPortion(
+      req.user!.id,
+      current.product_id === null ? null : Number(current.product_id),
+      grams,
+    );
     return { id, grams, name };
   });
 

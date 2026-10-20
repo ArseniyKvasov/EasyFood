@@ -118,6 +118,21 @@ const migrations: Migration[] = [
       CREATE UNIQUE INDEX IF NOT EXISTS settings_user_uniq ON settings (user_id) WHERE user_id IS NOT NULL;
     `,
   },
+  {
+    id: '004_portions',
+    sql: `
+      -- Привычные порции: с каким весом пользователь чаще всего добавляет продукт.
+      CREATE TABLE IF NOT EXISTS product_portions (
+        user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        grams      NUMERIC(8,2) NOT NULL,
+        uses       INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (user_id, product_id, grams)
+      );
+      CREATE INDEX IF NOT EXISTS product_portions_user_idx ON product_portions (user_id, product_id);
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

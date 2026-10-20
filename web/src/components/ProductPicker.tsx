@@ -181,13 +181,15 @@ export function ProductPicker({
                 Продукт со штрихкодом {codeMiss} не найден. Добавьте его в базу — останется вписать
                 название и КБЖУ.
               </div>
-              <button
-                className="btn btn-primary w-100 mt-2"
-                onClick={() => onCreate({ barcode: codeMiss })}
-              >
-                <IconPlus size={17} />
-                Добавить продукт
-              </button>
+              <div className="modal-footer-sticky">
+                <button
+                  className="btn btn-primary w-100"
+                  onClick={() => onCreate({ barcode: codeMiss })}
+                >
+                  <IconPlus size={17} />
+                  Добавить продукт
+                </button>
+              </div>
             </>
           )}
         </>
@@ -377,13 +379,15 @@ export function ProductPicker({
           </div>
         )}
 
-        <button
-          className="btn btn-soft w-100 mt-3"
-          onClick={() => onCreate({ name: query.trim() })}
-        >
-          <IconPlus size={17} />
-          Создать продукт
-        </button>
+        <div className="modal-footer-sticky">
+          <button
+            className="btn btn-soft w-100"
+            onClick={() => onCreate({ name: query.trim() })}
+          >
+            <IconPlus size={17} />
+            Создать продукт
+          </button>
+        </div>
       </>
     );
   };
