@@ -153,6 +153,9 @@ nginx -t && systemctl reload nginx
 
 ## 6. Сертификат Let's Encrypt
 
+Подставьте **свой** почтовый ящик вместо `admin@fastclass.online` — иначе Let's Encrypt
+не сможет прислать уведомление об истечении сертификата.
+
 ```bash
 apt install -y certbot python3-certbot-nginx
 certbot --nginx -d food.fastclass.online --agree-tos -m admin@fastclass.online --redirect
@@ -171,6 +174,11 @@ systemctl list-timers | grep certbot
 ```bash
 curl -I https://food.fastclass.online
 ```
+
+> **Если `nginx -t` ругается на `unknown directive "http2"`** — версия nginx старше 1.25.1.
+> Конфиг в репозитории совместим со старыми версиями (`listen 443 ssl http2;`),
+> достаточно перезалить его:
+> `cp /opt/EasyFood/deploy/nginx/food.fastclass.online.conf /etc/nginx/sites-available/food.fastclass.online && nginx -t && systemctl reload nginx`
 
 ---
 
