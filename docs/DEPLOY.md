@@ -179,6 +179,36 @@ cp deploy/nginx/food.fastclass.online.conf /etc/nginx/sites-available/food.fastc
 nginx -t && systemctl reload nginx
 ```
 
+> **Если публичный 443 у вас обслуживает stream-прокси с маршрутизацией по SNI**
+> (проверьте: `nginx -T | grep ssl_preread`), обычный конфиг не сработает — TLS
+> завершает тот backend, куда stream отправит соединение по SNI, и домен получит
+> чужой сертификат. Тогда используйте вариант для SNI-прокси:
+>
+> ```bash
+> cd /opt/EasyFood
+> # 1) в stream-конфиг (/etc/nginx/stream-xray.conf) добавить в map строку
+> #    food.fastclass.online 127.0.0.1:8447;
+> #    и отдельный server (фрагмент — deploy/nginx/stream-food.fastclass.online.conf):
+> #      server {
+> #          listen 127.0.0.1:8447;
+> #          proxy_pass 127.0.0.1:8448;
+> #          proxy_protocol on;
+> #      }
+>
+> # 2) конфиг сайта на локальный порт
+> cp deploy/nginx/food.fastclass.online.sni.conf /etc/nginx/sites-available/food.fastclass.online
+> nginx -t && systemctl reload nginx
+> ```
+>
+> Проверка, что SNI-маршрут ведёт куда надо:
+>
+> ```bash
+> echo | openssl s_client -connect 127.0.0.1:443 -servername food.fastclass.online 2>/dev/null \
+>   | openssl x509 -noout -subject
+> # должно быть: subject= CN = food.fastclass.online
+> ```
+```
+
 Полный конфиг (`deploy/nginx/food.fastclass.online.conf`) делает две вещи:
 
 - на `:80` — ACME-challenge для выпуска сертификата и редирект на HTTPS;
