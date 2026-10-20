@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { shiftDate, today } from './lib/date';
 import { num } from './lib/format';
-import type { Diary, Entry, MealId, Product, Settings, WeekDay } from './types';
+import type { Diary, Entry, MealId, Product, Settings } from './types';
 import { Header } from './components/Header';
 import { CalorieRing } from './components/CalorieRing';
 import { MacroList } from './components/MacroList';
-import { WeekStrip } from './components/WeekStrip';
 import { MealCard } from './components/MealCard';
 import { ProductPicker } from './components/ProductPicker';
 import { GramsSheet } from './components/GramsSheet';
 import { ProductEditor } from './components/ProductEditor';
 import { SettingsSheet } from './components/SettingsSheet';
+import { Sheet } from './components/Sheet';
+import { AuthScreen } from './components/AuthScreen';
 import { ToastHost, type ToastItem } from './components/Toast';
 import { IconRefresh } from './components/Icons';
 
@@ -29,16 +30,28 @@ const MEAL_NAMES: Record<MealId, string> = {
 };
 
 export default function App() {
+  const [user, setUser] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [date, setDate] = useState(today());
   const [diary, setDiary] = useState<Diary | null>(null);
-  const [week, setWeek] = useState<WeekDay[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stack, setStack] = useState<SheetState[]>([]);
+  const [closing, setClosing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [productVersion, setProductVersion] = useState(0);
   const toastId = useRef(0);
+  const closeTimer = useRef<number | undefined>(undefined);
+
+  // Проверяем сессию при старте
+  useEffect(() => {
+    api
+      .me()
+      .then((r) => setUser(r.username))
+      .catch(() => setUser(null))
+      .finally(() => setAuthChecked(true));
+  }, []);
 
   const pushToast = useCallback((text: string, action?: ToastItem['action']) => {
     const id = ++toastId.current;
@@ -49,31 +62,28 @@ export default function App() {
     setToasts((t) => t.filter((x) => x.id !== id));
   }, []);
 
-  const load = useCallback(
-    async (day: string, showSpinner = true) => {
-      if (showSpinner) setLoading(true);
-      setError(null);
-      try {
-        const [d, w, s] = await Promise.all([
-          api.getDiary(day),
-          api.getWeek(day),
-          api.getSettings(),
-        ]);
-        setDiary(d);
-        setWeek(w.days);
-        setSettings(s);
-      } catch {
-        setError('Не удалось загрузить данные. Проверьте, что сервер запущен.');
-      } finally {
-        setLoading(false);
+  const load = useCallback(async (day: string, showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    setError(null);
+    try {
+      const [d, s] = await Promise.all([api.getDiary(day), api.getSettings()]);
+      setDiary(d);
+      setSettings(s);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null);
+        return;
       }
-    },
-    [],
-  );
+      setError('Не удалось загрузить данные. Проверьте, что сервер запущен.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    if (!user) return;
     void load(date);
-  }, [date, load]);
+  }, [date, load, user]);
 
   // Тема
   useEffect(() => {
@@ -85,6 +95,15 @@ export default function App() {
     }
   }, [settings?.theme]);
 
+  // Блокируем прокрутку страницы, пока открыта шторка
+  useEffect(() => {
+    const open = stack.length > 0;
+    document.body.style.overflow = open ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [stack.length]);
+
   const targets = useMemo(
     () => ({
       kcal: settings?.kcal ?? 2100,
@@ -95,10 +114,43 @@ export default function App() {
     [settings],
   );
 
-  const pop = useCallback(() => setStack((s) => s.slice(0, -1)), []);
-  const closeAll = useCallback(() => setStack([]), []);
+  const closeAll = useCallback(() => {
+    setStack((s) => {
+      if (!s.length) return s;
+      setClosing(true);
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = window.setTimeout(() => {
+        setStack([]);
+        setClosing(false);
+      }, 180);
+      return s;
+    });
+  }, []);
 
-  const push = useCallback((sheet: SheetState) => setStack((s) => [...s, sheet]), []);
+  const pop = useCallback(() => {
+    setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+  }, []);
+
+  const push = useCallback((sheet: SheetState) => {
+    setClosing(false);
+    setStack((s) => [...s, sheet]);
+  }, []);
+
+  // Escape закрывает верхний шаг
+  useEffect(() => {
+    if (!stack.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (stack.length > 1) pop();
+        else closeAll();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [stack.length, pop, closeAll]);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   // ---------- Действия ----------
 
@@ -171,60 +223,71 @@ export default function App() {
     useCount: 0,
   });
 
-  // ---------- Рендер ----------
+  // ---------- Рендер шагов ----------
 
   const top = stack[stack.length - 1];
+
+  const editorTitle = (product: Product | null) =>
+    !product ? 'Новый продукт' : product.source === 'off' ? 'Своя версия' : 'Редактирование';
 
   const renderSheet = () => {
     if (!top) return null;
 
     if (top.kind === 'picker') {
       return (
-        <ProductPicker
-          meal={top.meal}
-          mealName={MEAL_NAMES[top.meal]}
-          refreshToken={productVersion}
-          onPick={(p) =>
-            push({
-              kind: 'grams',
-              product: p,
-              entryId: null,
-              grams: p.servingG || 100,
-              meal: top.meal,
-            })
-          }
-          onEdit={(p) => push({ kind: 'editor', product: p, prefill: {} })}
-          onCreate={(prefill) => push({ kind: 'editor', product: null, prefill })}
-          onClose={closeAll}
-        />
+        <Sheet title={`Добавить в «${MEAL_NAMES[top.meal]}»`} onClose={closeAll}>
+          <ProductPicker
+            meal={top.meal}
+            mealName={MEAL_NAMES[top.meal]}
+            refreshToken={productVersion}
+            onPick={(p) =>
+              push({
+                kind: 'grams',
+                product: p,
+                entryId: null,
+                grams: p.servingG || 100,
+                meal: top.meal,
+              })
+            }
+            onEdit={(p) => push({ kind: 'editor', product: p, prefill: {} })}
+            onCreate={(prefill) => push({ kind: 'editor', product: null, prefill })}
+          />
+        </Sheet>
       );
     }
 
     if (top.kind === 'grams') {
-      const entry = top.entryId !== null ? diary?.meals.flatMap((m) => m.entries).find((e) => e.id === top.entryId) : null;
+      const entry =
+        top.entryId !== null
+          ? diary?.meals.flatMap((m) => m.entries).find((e) => e.id === top.entryId)
+          : null;
       return (
-        <GramsSheet
-          product={top.product}
-          entryId={top.entryId}
-          initialGrams={top.grams}
-          mealName={MEAL_NAMES[top.meal]}
-          onBack={pop}
-          onSave={(grams) => {
-            if (entry) void updateEntry(entry, grams);
-            else void addEntry(top.product, top.meal, grams);
-          }}
-          onDelete={() => {
-            if (entry) void deleteEntry(entry);
-          }}
-          onEditProduct={() => {
-            const id = top.product.id;
-            if (id > 0) {
-              void api.getProduct(id).then((p) => push({ kind: 'editor', product: p, prefill: {} }));
-            } else {
-              push({ kind: 'editor', product: top.product, prefill: {} });
-            }
-          }}
-        />
+        <Sheet title={top.product.name} onClose={closeAll} onBack={pop}>
+          <GramsSheet
+            product={top.product}
+            entryId={top.entryId}
+            initialGrams={top.grams}
+            mealName={MEAL_NAMES[top.meal]}
+            onSave={(grams) => {
+              if (entry) void updateEntry(entry, grams);
+              else void addEntry(top.product, top.meal, grams);
+            }}
+            onDelete={() => {
+              if (entry) void deleteEntry(entry);
+            }}
+            onEditProduct={() => {
+              const id = top.product.id;
+              if (id > 0) {
+                void api
+                  .getProduct(id)
+                  .then((p) => push({ kind: 'editor', product: p, prefill: {} }))
+                  .catch(() => push({ kind: 'editor', product: top.product, prefill: {} }));
+              } else {
+                push({ kind: 'editor', product: top.product, prefill: {} });
+              }
+            }}
+          />
+        </Sheet>
       );
     }
 
@@ -232,53 +295,82 @@ export default function App() {
       const below = stack[stack.length - 2];
       const originMeal: MealId = below && below.kind === 'picker' ? below.meal : 'snack';
       return (
-        <ProductEditor
-          product={top.product}
-          prefill={top.prefill}
-          onBack={pop}
-          onSaved={(saved) => {
-            setProductVersion((v) => v + 1);
-            if (top.product) {
-              setStack((s) => s.slice(0, -1));
-              pushToast('Продукт сохранён');
-            } else {
-              setStack((s) => [
-                ...s.slice(0, -1),
-                {
-                  kind: 'grams',
-                  product: saved,
-                  entryId: null,
-                  grams: saved.servingG || 100,
-                  meal: originMeal,
-                },
-              ]);
-              pushToast('Продукт сохранён');
-            }
-          }}
-          onDeleted={() => {
-            setProductVersion((v) => v + 1);
-            setStack((s) => s.slice(0, -1));
-            pushToast('Продукт удалён');
-          }}
-        />
+        <Sheet title={editorTitle(top.product)} onClose={closeAll} onBack={pop}>
+          <ProductEditor
+            product={top.product}
+            prefill={top.prefill}
+            onSaved={(saved) => {
+              setProductVersion((v) => v + 1);
+              if (top.product) {
+                pop();
+                pushToast('Продукт сохранён');
+              } else {
+                setStack((s) => [
+                  ...s.slice(0, -1),
+                  {
+                    kind: 'grams',
+                    product: saved,
+                    entryId: null,
+                    grams: saved.servingG || 100,
+                    meal: originMeal,
+                  },
+                ]);
+                pushToast('Продукт сохранён');
+              }
+            }}
+            onDeleted={() => {
+              setProductVersion((v) => v + 1);
+              pop();
+              pushToast('Продукт удалён');
+            }}
+          />
+        </Sheet>
       );
     }
 
     return (
-      <SettingsSheet
-        settings={settings ?? { ...targets, theme: 'auto', onboarded: false }}
-        onClose={closeAll}
-        onSaved={(s) => {
-          setSettings(s);
-          closeAll();
-          pushToast('Настройки сохранены');
-          void load(date, false);
-        }}
-      />
+      <Sheet title="Настройки" onClose={closeAll}>
+        <SettingsSheet
+          settings={settings ?? { ...targets, theme: 'auto', onboarded: false }}
+          username={user ?? ''}
+          onSaved={(s) => {
+            setSettings(s);
+            closeAll();
+            pushToast('Настройки сохранены');
+            void load(date, false);
+          }}
+          onLogout={() => {
+            void api.logout().finally(() => {
+              setUser(null);
+              setDiary(null);
+              setSettings(null);
+            });
+          }}
+        />
+      </Sheet>
     );
   };
 
   const totals = diary?.totals ?? { kcal: 0, protein: 0, fat: 0, carbs: 0 };
+
+  if (!authChecked) {
+    return (
+      <div className="auth">
+        <span className="spinner" style={{ color: 'var(--accent)' }} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AuthScreen
+        onAuthed={(username) => {
+          setUser(username);
+          setAuthChecked(true);
+        }}
+      />
+    );
+  }
 
   return (
     <div className="app">
@@ -298,89 +390,96 @@ export default function App() {
         onSettings={() => push({ kind: 'settings' })}
       />
 
-      <main className="main">
+      <main className="main container-xxl">
         {error && (
-          <div className="banner" style={{ gridColumn: '1 / -1' }}>
+          <div className="banner">
             <IconRefresh />
-            <span style={{ flex: 1 }}>{error}</span>
-            <button className="btn btn--ghost" onClick={() => void load(date)}>
+            <span className="flex-grow-1">{error}</span>
+            <button className="btn btn-outline-secondary btn-sm" onClick={() => void load(date)}>
               Повторить
             </button>
           </div>
         )}
 
-        <aside className="summary">
-          <section className="card ring-card">
-            <span className="label">Калории за день</span>
-            {loading && !diary ? (
-              <div className="skeleton" style={{ width: 216, height: 216, borderRadius: '50%', margin: 16 }} />
-            ) : (
-              <CalorieRing kcal={totals.kcal} target={targets.kcal} />
-            )}
-            <div className="kcal-figures">
-              <div>
-                <b>{num(totals.protein, 1)}</b>
-                <span>белки, г</span>
-              </div>
-              <div>
-                <b>{num(totals.fat, 1)}</b>
-                <span>жиры, г</span>
-              </div>
-              <div>
-                <b>{num(totals.carbs, 1)}</b>
-                <span>углеводы, г</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="card" style={{ padding: '18px 20px 20px' }}>
-            <span className="label">Белки, жиры, углеводы</span>
-            <div style={{ marginTop: 14 }}>
-              <MacroList totals={totals} targets={targets} />
-            </div>
-          </section>
-
-          <WeekStrip
-            days={week}
-            selected={date}
-            target={targets.kcal}
-            onSelect={(d) => setDate(d)}
-          />
-        </aside>
-
-        <section className="meals">
-          {loading && !diary
-            ? [0, 1, 2, 3].map((i) => (
-                <div key={i} className="card meal">
-                  <div className="skeleton" style={{ height: 38, width: '60%' }} />
-                  <div className="skeleton" style={{ height: 16, width: '85%', marginTop: 14 }} />
-                  <div className="skeleton" style={{ height: 16, width: '70%', marginTop: 8 }} />
+        <div className="row g-4 mt-4">
+          <div className="col-12 col-lg-5 col-xl-4">
+            <div className="summary">
+              <section className="card ring-card">
+                <div className="card-body">
+                  <p className="ef-label">Калории</p>
+                  {loading && !diary ? (
+                    <div
+                      className="skeleton"
+                      style={{ width: 212, height: 212, borderRadius: '50%', margin: '1.5rem auto 0' }}
+                    />
+                  ) : (
+                    <CalorieRing kcal={totals.kcal} target={targets.kcal} />
+                  )}
+                  <MacroList totals={totals} targets={targets} />
                 </div>
-              ))
-            : (diary?.meals ?? []).map((meal) => (
-                <MealCard
-                  key={meal.id}
-                  meal={meal}
-                  onAdd={() => push({ kind: 'picker', meal: meal.id })}
-                  onEditEntry={(entryId) => {
-                    const entry = diary?.meals
-                      .flatMap((m) => m.entries)
-                      .find((e) => e.id === entryId);
-                    if (!entry) return;
-                    push({
-                      kind: 'grams',
-                      product: productFromEntry(entry),
-                      entryId: entry.id,
-                      grams: entry.grams,
-                      meal: entry.meal,
-                    });
-                  }}
-                />
-              ))}
-        </section>
+              </section>
+            </div>
+          </div>
+
+          <div className="col-12 col-lg-7 col-xl-8">
+            <div className="row g-4">
+              {loading && !diary
+                ? [0, 1, 2, 3].map((i) => (
+                    <div className="col-12 col-xl-6" key={i}>
+                      <div className="card h-100">
+                        <div className="card-body">
+                          <div className="skeleton" style={{ height: 26, width: '45%' }} />
+                          <div className="skeleton" style={{ height: 16, width: '85%', marginTop: 18 }} />
+                          <div className="skeleton" style={{ height: 16, width: '65%', marginTop: 10 }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                : (diary?.meals ?? []).map((meal) => (
+                    <div className="col-12 col-xl-6" key={meal.id}>
+                      <MealCard
+                        meal={meal}
+                        onAdd={() => push({ kind: 'picker', meal: meal.id })}
+                        onEditEntry={(entryId) => {
+                          const entry = diary?.meals
+                            .flatMap((m) => m.entries)
+                            .find((e) => e.id === entryId);
+                          if (!entry) return;
+                          push({
+                            kind: 'grams',
+                            product: productFromEntry(entry),
+                            entryId: entry.id,
+                            grams: entry.grams,
+                            meal: entry.meal,
+                          });
+                        }}
+                      />
+                    </div>
+                  ))}
+            </div>
+          </div>
+        </div>
       </main>
 
-      {renderSheet()}
+      {top && (
+        <>
+          <div className={`modal-backdrop fade${closing ? '' : ' show'}`} />
+          <div
+            className={`modal fade${closing ? '' : ' show'}`}
+            style={{ display: 'block' }}
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) closeAll();
+            }}
+          >
+            <div className="modal-dialog modal-dialog-centered">
+              <div className="modal-content">{renderSheet()}</div>
+            </div>
+          </div>
+        </>
+      )}
+
       <ToastHost items={toasts} onDismiss={dismissToast} />
     </div>
   );

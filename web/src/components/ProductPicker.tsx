@@ -3,7 +3,6 @@ import { api, ApiError } from '../api';
 import { fileToDataUrl } from '../lib/image';
 import { num } from '../lib/format';
 import type { MealId, Product, Recognition } from '../types';
-import { Sheet } from './Sheet';
 import {
   IconBarcode,
   IconCamera,
@@ -29,7 +28,6 @@ type Props = {
   onPick: (product: Product) => void;
   onEdit: (product: Product) => void;
   onCreate: (prefill: { name?: string; barcode?: string }) => void;
-  onClose: () => void;
 };
 
 export function ProductPicker({
@@ -39,7 +37,6 @@ export function ProductPicker({
   onPick,
   onEdit,
   onCreate,
-  onClose,
 }: Props) {
   const [tab, setTab] = useState<Tab>('search');
   const [query, setQuery] = useState('');
@@ -113,12 +110,8 @@ export function ProductPicker({
       try {
         const res = await api.getProductByBarcode(value);
         onPick(res.product);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 404) {
-          setCodeMiss(value);
-        } else {
-          setCodeMiss(value);
-        }
+      } catch {
+        setCodeMiss(value);
       } finally {
         setCodeBusy(false);
       }
@@ -179,20 +172,19 @@ export function ProductPicker({
             onSubmit={() => void lookupCode(code)}
           />
           {codeMiss && (
-            <div className="notice notice--danger" style={{ marginTop: 12 }}>
-              Продукт со штрихкодом {codeMiss} не найден. Создайте его вручную — значения потом можно будет
-              уточнить.
-            </div>
-          )}
-          {codeMiss && (
-            <button
-              className="btn btn--block"
-              style={{ marginTop: 10 }}
-              onClick={() => onCreate({ barcode: codeMiss })}
-            >
-              <IconPlus size={17} />
-              Создать продукт
-            </button>
+            <>
+              <div className="alert alert-danger mt-3 mb-0">
+                Продукт со штрихкодом {codeMiss} не найден. Создайте его вручную — значения потом можно
+                будет уточнить.
+              </div>
+              <button
+                className="btn btn-primary w-100 mt-2"
+                onClick={() => onCreate({ barcode: codeMiss })}
+              >
+                <IconPlus size={17} />
+                Создать продукт
+              </button>
+            </>
           )}
         </>
       );
@@ -217,34 +209,35 @@ export function ProductPicker({
             <>
               <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
               {recognition ? (
-                <div className="card" style={{ padding: 14, marginBottom: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <IconSparkles size={17} />
-                    <b style={{ fontSize: 15 }}>{recognition.name}</b>
-                    <span className="badge badge--ai">
-                      уверенность {Math.round(recognition.confidence * 100)}%
-                    </span>
+                <div className="card mb-3">
+                  <div className="card-body">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <IconSparkles size={17} />
+                      <b>{recognition.name}</b>
+                      <span className="badge badge-ai">
+                        уверенность {Math.round(recognition.confidence * 100)}%
+                      </span>
+                    </div>
+                    <p className="hint mb-3">
+                      {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
+                      {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
+                      {num(recognition.nutrition.carbs, 1)}
+                    </p>
+                    <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
+                      <IconCheck />
+                      Добавить в «{mealName}»
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary w-100 mt-2"
+                      onClick={() => setRecognition(null)}
+                    >
+                      Распознать заново
+                    </button>
                   </div>
-                  <p className="hint">
-                    {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
-                    {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
-                    {num(recognition.nutrition.carbs, 1)}
-                  </p>
-                  <button className="btn btn--block" style={{ marginTop: 12 }} onClick={() => void useRecognition()}>
-                    <IconCheck />
-                    Добавить в «{mealName}»
-                  </button>
-                  <button
-                    className="btn btn--ghost btn--block"
-                    style={{ marginTop: 8 }}
-                    onClick={() => setRecognition(null)}
-                  >
-                    Распознать заново
-                  </button>
                 </div>
               ) : (
                 <button
-                  className="btn btn--block"
+                  className="btn btn-primary w-100"
                   onClick={() => void recognize()}
                   disabled={recognizing || !aiEnabled}
                 >
@@ -262,8 +255,7 @@ export function ProductPicker({
                 </button>
               )}
               <button
-                className="btn btn--ghost btn--block"
-                style={{ marginTop: 8 }}
+                className="btn btn-outline-secondary w-100 mt-2"
                 onClick={() => fileRef.current?.click()}
               >
                 Другое фото
@@ -279,13 +271,9 @@ export function ProductPicker({
             </button>
           )}
 
-          {aiError && (
-            <div className="notice notice--danger" style={{ marginTop: 12 }}>
-              {aiError}
-            </div>
-          )}
+          {aiError && <div className="alert alert-danger mt-3 mb-0">{aiError}</div>}
           {!aiEnabled && (
-            <p className="hint" style={{ marginTop: 12 }}>
+            <p className="hint mt-3 mb-0">
               Распознавание по фото не настроено на сервере. Добавьте ключ <code>OPENAI_API_KEY</code> или
               заполните продукт вручную.
             </p>
@@ -299,7 +287,7 @@ export function ProductPicker({
         <div className="search-field">
           <IconSearch />
           <input
-            className="field"
+            className="form-control"
             placeholder="Название продукта"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -325,9 +313,7 @@ export function ProductPicker({
                 <span className="product__body">
                   <span className="product__name">
                     {p.name}
-                    {p.source === 'own' && <span className="badge">свой</span>}
-                    {p.source === 'ai' && <span className="badge badge--ai">ИИ</span>}
-                    {p.source === 'off' && <span className="badge badge--off">OFF</span>}
+                    {p.source === 'ai' && <span className="badge badge-ai">ИИ</span>}
                   </span>
                   <span className="product__meta">
                     {num(p.kcal)} ккал · Б {num(p.protein, 1)} · Ж {num(p.fat, 1)} · У {num(p.carbs, 1)} на
@@ -359,8 +345,7 @@ export function ProductPicker({
         )}
 
         <button
-          className="btn btn--soft btn--block"
-          style={{ marginTop: 16 }}
+          className="btn btn-soft w-100 mt-3"
           onClick={() => onCreate({ name: query.trim() })}
         >
           <IconPlus size={17} />
@@ -371,13 +356,12 @@ export function ProductPicker({
   };
 
   return (
-    <Sheet
-      title={`Добавить в «${mealName}»`}
-      onClose={onClose}
-      belowTitle={<Tabs tab={tab} onTab={setTab} />}
-    >
+    <>
+      <div className="segmented">
+        <Tabs tab={tab} onTab={setTab} />
+      </div>
       {body()}
-    </Sheet>
+    </>
   );
 }
 
@@ -388,18 +372,20 @@ function Tabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
     ['photo', 'Фото', <IconImage key="p" size={15} />],
   ];
   return (
-    <div className="segmented" style={{ padding: '3px 14px 0' }}>
+    <>
       {items.map(([key, label, icon]) => (
-        <button key={key} aria-selected={tab === key} onClick={() => onTab(key)}>
-          <span
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}
-          >
-            {icon}
-            {label}
-          </span>
+        <button
+          key={key}
+          className={`nav-link${tab === key ? ' active' : ''}`}
+          aria-selected={tab === key}
+          role="tab"
+          onClick={() => onTab(key)}
+        >
+          {icon}
+          {label}
         </button>
       ))}
-    </div>
+    </>
   );
 }
 
@@ -419,8 +405,7 @@ function BarcodePane({ code, busy, onCode, onDetect, onSubmit }: BarcodePaneProp
         <>
           <BarcodeLive onDetected={onDetect} />
           <button
-            className="btn btn--ghost btn--block"
-            style={{ marginBottom: 12 }}
+            className="btn btn-outline-secondary w-100 mb-3"
             onClick={() => setScanning(false)}
           >
             Выключить камеру
@@ -428,8 +413,7 @@ function BarcodePane({ code, busy, onCode, onDetect, onSubmit }: BarcodePaneProp
         </>
       ) : (
         <button
-          className="btn btn--ghost btn--block"
-          style={{ marginBottom: 12 }}
+          className="btn btn-outline-secondary w-100 mb-3"
           onClick={() => setScanning(true)}
         >
           <IconCamera size={17} />
@@ -437,7 +421,7 @@ function BarcodePane({ code, busy, onCode, onDetect, onSubmit }: BarcodePaneProp
         </button>
       )}
       <input
-        className="field"
+        className="form-control mb-3"
         inputMode="numeric"
         placeholder="Или введите цифры штрихкода"
         value={code}
@@ -446,7 +430,7 @@ function BarcodePane({ code, busy, onCode, onDetect, onSubmit }: BarcodePaneProp
           if (e.key === 'Enter') onSubmit();
         }}
       />
-      <button className="btn btn--block" onClick={onSubmit} disabled={busy}>
+      <button className="btn btn-primary w-100" onClick={onSubmit} disabled={busy}>
         {busy ? (
           <>
             <span className="spinner" />

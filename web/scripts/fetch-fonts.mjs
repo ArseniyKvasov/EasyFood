@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Скачивает Inter (latin + cyrillic) в web/public/fonts, чтобы контейнер
+ * Скачивает Montserrat (latin + cyrillic) в web/public/fonts, чтобы контейнер
  * не зависел от Google Fonts во время работы.
  *
  *   node web/scripts/fetch-fonts.mjs
@@ -15,19 +15,20 @@ const outDir = resolve(here, '../public/fonts');
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36';
 
+const FAMILY = 'Montserrat:wght@400..700';
+
 const WANTED = [
-  { file: 'inter-latin.woff2', subset: 'latin' },
-  { file: 'inter-cyrillic.woff2', subset: 'cyrillic' },
+  { file: 'montserrat-latin.woff2', subset: 'latin' },
+  { file: 'montserrat-cyrillic.woff2', subset: 'cyrillic' },
 ];
 
 async function main() {
   await mkdir(outDir, { recursive: true });
 
-  const cssUrl =
-    'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap';
+  const cssUrl = `https://fonts.googleapis.com/css2?family=${FAMILY}&display=swap`;
   const css = await (await fetch(cssUrl, { headers: { 'User-Agent': UA } })).text();
 
-  // В CSS каждый @font-face содержит comment с названием диапазона символов.
+  // Каждый @font-face в ответе — отдельное подмножество с юникод-диапазоном.
   const blocks = css.split('@font-face').slice(1);
   const bySubset = new Map();
 

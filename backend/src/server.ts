@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { migrate } from './migrations.js';
 import { pool } from './db.js';
+import { authHook } from './middleware/auth.js';
+import { authRoutes } from './routes/auth.js';
 import { diaryRoutes } from './routes/diary.js';
 import { productRoutes } from './routes/products.js';
 import { recognizeRoutes } from './routes/recognize.js';
@@ -46,6 +48,9 @@ app.setErrorHandler((err: FastifyError, req, reply) => {
 });
 
 app.get('/api/health', async () => ({ ok: true, version: '1.0.0' }));
+
+await app.register(authRoutes);
+await authHook(app);
 
 await app.register(diaryRoutes);
 await app.register(productRoutes);

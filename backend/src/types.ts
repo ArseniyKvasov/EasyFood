@@ -1,3 +1,11 @@
+import 'fastify';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: { id: number; username: string };
+  }
+}
+
 export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export const MEALS: { id: MealId; name: string; emoji: string }[] = [

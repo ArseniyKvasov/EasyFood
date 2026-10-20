@@ -89,7 +89,29 @@ OPEN_FOOD_FACTS_ENABLED=true
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o-mini
+OPENAI_REASONING_EFFORT=
+OPENAI_TEMPERATURE=0.2
+OPENAI_MAX_TOKENS=
+OPENAI_RESPONSE_FORMAT=json_object
 ```
+
+### OpenRouter + Claude Haiku 5.5
+
+Для reasoning-моделей OpenRouter (например, Claude Haiku 5.5) нужны три
+дополнительных значения:
+
+```bash
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+OPENAI_MODEL=anthropic/claude-haiku-5.5
+OPENAI_REASONING_EFFORT=medium
+OPENAI_TEMPERATURE=            # пусто: Haiku 5.5 принимает только temperature=1
+OPENAI_RESPONSE_FORMAT=json_schema
+```
+
+`OPENAI_REASONING_EFFORT` уходит в OpenRouter как `reasoning.effort`
+(`low`/`minimal`/`medium`/`high`/`xhigh`/`max`/`none`). Пустое значение —
+параметр не отправляется, и модель думает на своём дефолте (у Haiku 5.5 это
+`medium`).
 
 > Если доступ к репозиторию закрыт, используйте SSH-ключ:
 > `git clone git@github.com:ArseniyKvasov/EasyFood.git`

@@ -14,39 +14,47 @@ type Props = {
 export function Header({ date, theme, onPrev, onNext, onToday, onTheme, onSettings }: Props) {
   return (
     <header className="topbar">
-      <div className="topbar__inner">
-        <div className="brand">
-          <span className="brand__mark">
-            <IconLeaf size={19} />
-          </span>
-          <span className="brand__text">EasyFood</span>
-        </div>
+      <div className="container-xxl">
+        <div className="topbar__grid">
+          <div className="topbar__side">
+            <span className="brand">
+              <span className="brand__mark">
+                <IconLeaf size={19} />
+              </span>
+              <span className="brand__text">EasyFood</span>
+            </span>
+          </div>
 
-        <div className="datenav">
-          <button className="icon-btn" onClick={onPrev} aria-label="Предыдущий день">
-            <IconChevronLeft size={18} />
-          </button>
-          <button className="datenav__label" onClick={onToday} title="Вернуться к сегодняшнему дню">
-            {formatDayTitle(date)}
-            <small>{formatDaySubtitle(date)}</small>
-          </button>
-          <button className="icon-btn" onClick={onNext} aria-label="Следующий день">
-            <IconChevronRight size={18} />
-          </button>
-        </div>
+          <div className="datenav">
+            <button className="icon-btn" onClick={onPrev} aria-label="Предыдущий день">
+              <IconChevronLeft size={18} />
+            </button>
+            <button
+              className="datenav__label"
+              onClick={onToday}
+              title="Вернуться к сегодняшнему дню"
+            >
+              {formatDayTitle(date)}
+              <small>{formatDaySubtitle(date)}</small>
+            </button>
+            <button className="icon-btn" onClick={onNext} aria-label="Следующий день">
+              <IconChevronRight size={18} />
+            </button>
+          </div>
 
-        <div className="topbar__actions">
-          <button
-            className="icon-btn"
-            onClick={onTheme}
-            aria-label="Переключить тему"
-            title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
-          >
-            {theme === 'dark' ? <IconSun /> : <IconMoon />}
-          </button>
-          <button className="icon-btn" onClick={onSettings} aria-label="Настройки">
-            <IconSettings />
-          </button>
+          <div className="topbar__side topbar__side--end">
+            <button
+              className="icon-btn"
+              onClick={onTheme}
+              aria-label="Переключить тему"
+              title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            >
+              {theme === 'dark' ? <IconSun /> : <IconMoon />}
+            </button>
+            <button className="icon-btn" onClick={onSettings} aria-label="Настройки">
+              <IconSettings />
+            </button>
+          </div>
         </div>
       </div>
     </header>

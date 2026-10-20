@@ -7,7 +7,7 @@ type Props = {
 };
 
 const MACROS = [
-  { key: 'protein', name: 'Белки', color: 'var(--protein)' },
+  { key: 'protein', name: 'Белок', color: 'var(--protein)' },
   { key: 'fat', name: 'Жиры', color: 'var(--fat)' },
   { key: 'carbs', name: 'Углеводы', color: 'var(--carbs)' },
 ] as const;
@@ -22,10 +22,7 @@ export function MacroList({ totals, targets }: Props) {
         return (
           <div key={m.key}>
             <div className="macro__head">
-              <span className="macro__name">
-                <i className="macro__dot" style={{ background: m.color }} />
-                {m.name}
-              </span>
+              <span className="macro__name">{m.name}</span>
               <span className="macro__value">
                 <b>{num(value, 1)}</b> / {num(target)} г
               </span>

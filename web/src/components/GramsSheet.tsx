@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { num } from '../lib/format';
 import type { Product } from '../types';
-import { Sheet } from './Sheet';
 import { IconPencil, IconTrash } from './Icons';
 
 type Props = {
@@ -12,7 +11,6 @@ type Props = {
   onSave: (grams: number) => void;
   onDelete: () => void;
   onEditProduct: () => void;
-  onBack: () => void;
 };
 
 export function GramsSheet({
@@ -23,7 +21,6 @@ export function GramsSheet({
   onSave,
   onDelete,
   onEditProduct,
-  onBack,
 }: Props) {
   const [grams, setGrams] = useState(initialGrams);
 
@@ -50,17 +47,8 @@ export function GramsSheet({
   const editing = entryId !== null;
 
   return (
-    <Sheet
-      title={product.name}
-      onClose={onBack}
-      onBack={onBack}
-    >
-      <p className="hint" style={{ marginBottom: 14 }}>
-        На 100 г: {num(product.kcal)} ккал · Б {num(product.protein, 1)} · Ж {num(product.fat, 1)} · У{' '}
-        {num(product.carbs, 1)}
-      </p>
-
-      <label className="field-label" htmlFor="grams">
+    <>
+      <label className="form-label" htmlFor="grams">
         Порция, г
       </label>
       <div className="grams-input">
@@ -73,7 +61,7 @@ export function GramsSheet({
         </button>
         <input
           id="grams"
-          className="field"
+          className="form-control"
           type="number"
           inputMode="decimal"
           min={0}
@@ -92,12 +80,7 @@ export function GramsSheet({
 
       <div className="chips">
         {presets.map((p) => (
-          <button
-            key={p}
-            className="chip"
-            aria-pressed={p === grams}
-            onClick={() => setGrams(p)}
-          >
+          <button key={p} className="chip" aria-pressed={p === grams} onClick={() => setGrams(p)}>
             {p} г
           </button>
         ))}
@@ -122,25 +105,33 @@ export function GramsSheet({
         </div>
       </div>
 
-      <button
-        className="btn btn--block btn--lg"
-        disabled={!(grams > 0)}
-        onClick={() => onSave(grams)}
-      >
-        {editing ? 'Сохранить' : `Добавить в «${mealName}»`}
-      </button>
-
-      {editing && (
-        <button className="btn btn--danger btn--block" style={{ marginTop: 8 }} onClick={onDelete}>
-          <IconTrash size={16} />
-          Удалить из дневника
+      <div className="action-row">
+        <button
+          className="btn btn-primary btn-lg flex-grow-1"
+          disabled={!(grams > 0)}
+          onClick={() => onSave(grams)}
+        >
+          {editing ? 'Сохранить' : `Добавить в «${mealName}»`}
         </button>
-      )}
-
-      <button className="btn btn--ghost btn--block" style={{ marginTop: 8 }} onClick={onEditProduct}>
-        <IconPencil size={16} />
-        Изменить продукт
-      </button>
-    </Sheet>
+        <button
+          className="btn btn-outline-secondary btn-icon"
+          onClick={onEditProduct}
+          aria-label="Изменить продукт"
+          title="Изменить продукт"
+        >
+          <IconPencil size={18} />
+        </button>
+        {editing && (
+          <button
+            className="btn btn-danger-soft btn-icon"
+            onClick={onDelete}
+            aria-label="Удалить из дневника"
+            title="Удалить из дневника"
+          >
+            <IconTrash size={18} />
+          </button>
+        )}
+      </div>
+    </>
   );
 }

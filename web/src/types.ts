@@ -59,11 +59,6 @@ export type Diary = {
   meals: MealBucket[];
 };
 
-export type WeekDay = {
-  date: string;
-  kcal: number;
-};
-
 export type Recognition = {
   name: string;
   grams: number;

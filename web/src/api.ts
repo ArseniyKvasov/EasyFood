@@ -1,4 +1,4 @@
-import type { Diary, Entry, Nutrition, Product, Recognition, Settings, WeekDay } from './types';
+import type { Diary, Entry, Nutrition, Product, Recognition, Settings } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -12,6 +12,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
+    credentials: 'same-origin',
     headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...init,
   });
@@ -37,9 +38,18 @@ const json = (body: unknown): RequestInit => ({
 });
 
 export const api = {
-  getDiary: (date: string) => request<Diary>(`/api/diary?date=${date}`),
+  // --- Аккаунт ---
+  me: () => request<{ username: string }>('/api/auth/me'),
 
-  getWeek: (end: string) => request<{ days: WeekDay[] }>(`/api/week?end=${end}`),
+  login: (input: { username: string; password: string }) =>
+    request<{ username: string }>('/api/auth/login', json(input)),
+
+  register: (input: { username: string; password: string }) =>
+    request<{ username: string }>('/api/auth/register', json(input)),
+
+  logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
+
+  getDiary: (date: string) => request<Diary>(`/api/diary?date=${date}`),
 
   createEntry: (input: {
     day: string;

@@ -31,11 +31,11 @@ export function ToastHost({ items, onDismiss }: Props) {
   return (
     <div className="toast-host" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} className={`toast${leaving === t.id ? ' toast--leaving' : ''}`}>
-          <span className="toast__text">{t.text}</span>
+        <div key={t.id} className={`notif${leaving === t.id ? ' notif--leaving' : ''}`}>
+          <span className="notif__text">{t.text}</span>
           {t.action && (
             <button
-              className="toast__action"
+              className="notif__action"
               onClick={() => {
                 t.action?.run();
                 onDismiss(t.id);

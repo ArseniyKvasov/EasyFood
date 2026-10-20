@@ -4,14 +4,11 @@ export const round = (value: number, digits = 0): string => {
   return n.toFixed(digits);
 };
 
-/** «1 234» — с неразрывным пробелом, чтобы число не рвалось по строкам. */
+/** «1 234.5» — с неразрывным пробелом между разрядами, разделитель — точка. */
 export const num = (value: number, digits = 0): string => {
   const n = Number(value);
   if (!Number.isFinite(n)) return '0';
-  return n
-    .toFixed(digits)
-    .replace('.', ',')
-    .replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f');
+  return n.toFixed(digits).replace(/\B(?=(\d{3})+(?!\d))/g, '\u202f');
 };
 
 export const plural = (count: number, one: string, few: string, many: string): string => {

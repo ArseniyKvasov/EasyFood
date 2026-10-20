@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { api } from '../api';
 import { num } from '../lib/format';
 import type { Product } from '../types';
-import { Sheet } from './Sheet';
-import { IconTrash } from './Icons';
+import { IconBarcode, IconTrash } from './Icons';
+
+// ZXing грузим лениво — сканер нужен не всегда.
+const BarcodeScanner = lazy(() =>
+  import('./BarcodeScanner').then((m) => ({ default: m.BarcodeScanner })),
+);
 
 type Props = {
   product: Product | null;
   prefill: { name?: string; barcode?: string };
   onSaved: (product: Product) => void;
   onDeleted: () => void;
-  onBack: () => void;
 };
 
 type Form = {
@@ -33,7 +36,7 @@ const emptyForm = (prefill: { name?: string; barcode?: string }): Form => ({
   barcode: prefill.barcode ?? '',
 });
 
-export function ProductEditor({ product, prefill, onSaved, onDeleted, onBack }: Props) {
+export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
   const [form, setForm] = useState<Form>(() =>
     product
       ? {
@@ -49,6 +52,7 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted, onBack }: 
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   const set = (key: keyof Form) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -89,8 +93,6 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted, onBack }: 
     return { warning: msg, valid: ok };
   }, [numbers, form.name, form.servingG]);
 
-  const isOff = product?.source === 'off';
-
   const save = async () => {
     if (!valid) return;
     setBusy(true);
@@ -130,78 +132,67 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted, onBack }: 
     }
   };
 
-  const title = !product ? 'Новый продукт' : isOff ? 'Своя версия продукта' : 'Редактирование';
-
   return (
-    <Sheet title={title} onClose={onBack} onBack={onBack}>
-      {isOff && (
-        <p className="hint" style={{ marginBottom: 14 }}>
-          Данные Open Food Facts не меняются. Сохраните свою версию с правками — она будет
-          использоваться вместо оригинала.
-        </p>
-      )}
-
-      <label className="field-label" htmlFor="p-name">
+    <>
+      <label className="form-label" htmlFor="p-name">
         Название
       </label>
       <input
         id="p-name"
-        className="field"
+        className="form-control mb-3"
         value={form.name}
         placeholder="Например, гречка варёная"
         onChange={(e) => set('name')(e.target.value)}
       />
 
-      <label className="field-label" style={{ marginTop: 12 }}>
-        Значения на 100 г
-      </label>
-      <div className="grid-4">
-        <div>
-          <label className="field-label" htmlFor="p-kcal">
+      <span className="form-label d-block">Значения на 100 г</span>
+      <div className="row g-2">
+        <div className="col-3">
+          <label className="form-label" htmlFor="p-kcal">
             Ккал
           </label>
           <input
             id="p-kcal"
-            className="field"
+            className="form-control text-center"
             type="number"
             inputMode="decimal"
             value={form.kcal}
             onChange={(e) => set('kcal')(e.target.value)}
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="p-protein">
+        <div className="col-3">
+          <label className="form-label" htmlFor="p-protein">
             Белки
           </label>
           <input
             id="p-protein"
-            className="field"
+            className="form-control text-center"
             type="number"
             inputMode="decimal"
             value={form.protein}
             onChange={(e) => set('protein')(e.target.value)}
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="p-fat">
+        <div className="col-3">
+          <label className="form-label" htmlFor="p-fat">
             Жиры
           </label>
           <input
             id="p-fat"
-            className="field"
+            className="form-control text-center"
             type="number"
             inputMode="decimal"
             value={form.fat}
             onChange={(e) => set('fat')(e.target.value)}
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="p-carbs">
+        <div className="col-3">
+          <label className="form-label" htmlFor="p-carbs">
             Углеводы
           </label>
           <input
             id="p-carbs"
-            className="field"
+            className="form-control text-center"
             type="number"
             inputMode="decimal"
             value={form.carbs}
@@ -210,43 +201,62 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted, onBack }: 
         </div>
       </div>
 
-      <label className="field-label" htmlFor="p-serving" style={{ marginTop: 12 }}>
+      <label className="form-label mt-3" htmlFor="p-serving">
         Порция по умолчанию, г
       </label>
       <input
         id="p-serving"
-        className="field"
+        className="form-control"
         type="number"
         inputMode="decimal"
         value={form.servingG}
         onChange={(e) => set('servingG')(e.target.value)}
       />
 
-      <label className="field-label" htmlFor="p-barcode" style={{ marginTop: 12 }}>
+      <label className="form-label mt-3" htmlFor="p-barcode">
         Штрихкод (необязательно)
       </label>
-      <input
-        id="p-barcode"
-        className="field"
-        inputMode="numeric"
-        value={form.barcode}
-        onChange={(e) => set('barcode')(e.target.value)}
-      />
+      <div className="input-with-btn">
+        <input
+          id="p-barcode"
+          className="form-control"
+          inputMode="numeric"
+          value={form.barcode}
+          onChange={(e) => set('barcode')(e.target.value)}
+        />
+        <button
+          type="button"
+          className="input-with-btn__btn"
+          onClick={() => setScanning((v) => !v)}
+          aria-label="Сканировать штрихкод"
+          title="Сканировать штрихкод"
+        >
+          <IconBarcode size={18} />
+        </button>
+      </div>
 
-      {warning && (
-        <div className="notice" style={{ marginTop: 12 }}>
-          {warning}
+      {scanning && (
+        <div className="scanner mt-2">
+          <Suspense
+            fallback={
+              <div className="scanner__placeholder">Запускаем камеру…</div>
+            }
+          >
+            <BarcodeScanner
+              onDetected={(code) => {
+                set('barcode')(code);
+                setScanning(false);
+              }}
+            />
+          </Suspense>
         </div>
       )}
-      {error && (
-        <div className="notice notice--danger" style={{ marginTop: 12 }}>
-          {error}
-        </div>
-      )}
+
+      {warning && <div className="alert alert-warning mt-3 mb-0">{warning}</div>}
+      {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
 
       <button
-        className="btn btn--block btn--lg"
-        style={{ marginTop: 16 }}
+        className="btn btn-primary btn-lg w-100 mt-4"
         disabled={!valid || busy}
         onClick={() => void save()}
       >
@@ -263,16 +273,11 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted, onBack }: 
       </button>
 
       {product && product.source === 'own' && (
-        <button
-          className="btn btn--danger btn--block"
-          style={{ marginTop: 8 }}
-          disabled={busy}
-          onClick={() => void remove()}
-        >
+        <button className="btn btn-danger-soft w-100 mt-2" disabled={busy} onClick={() => void remove()}>
           <IconTrash size={16} />
           Удалить продукт
         </button>
       )}
-    </Sheet>
+    </>
   );
 }

@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { api } from '../api';
 import type { Settings } from '../types';
-import { Sheet } from './Sheet';
 import { IconMonitor, IconMoon, IconSun } from './Icons';
 
 type Props = {
   settings: Settings;
+  username: string;
   onSaved: (settings: Settings) => void;
-  onClose: () => void;
+  onLogout: () => void;
 };
 
 type Draft = {
@@ -18,7 +18,7 @@ type Draft = {
   theme: Settings['theme'];
 };
 
-export function SettingsSheet({ settings, onSaved, onClose }: Props) {
+export function SettingsSheet({ settings, username, onSaved, onLogout }: Props) {
   const [draft, setDraft] = useState<Draft>({
     kcal: String(settings.kcal),
     protein: String(settings.protein),
@@ -66,56 +66,56 @@ export function SettingsSheet({ settings, onSaved, onClose }: Props) {
   ];
 
   return (
-    <Sheet title="Настройки" onClose={onClose}>
+    <>
       <section className="settings-section">
-        <span className="label">Дневная норма</span>
-        <div className="grid-4" style={{ marginTop: 12 }}>
-          <div>
-            <label className="field-label" htmlFor="s-kcal">
+        <span className="ef-label">Дневная норма</span>
+        <div className="row g-2 mt-1">
+          <div className="col-3">
+            <label className="form-label" htmlFor="s-kcal">
               Ккал
             </label>
             <input
               id="s-kcal"
-              className="field"
+              className="form-control text-center"
               type="number"
               inputMode="numeric"
               value={draft.kcal}
               onChange={(e) => set('kcal')(e.target.value)}
             />
           </div>
-          <div>
-            <label className="field-label" htmlFor="s-protein">
+          <div className="col-3">
+            <label className="form-label" htmlFor="s-protein">
               Белки
             </label>
             <input
               id="s-protein"
-              className="field"
+              className="form-control text-center"
               type="number"
               inputMode="numeric"
               value={draft.protein}
               onChange={(e) => set('protein')(e.target.value)}
             />
           </div>
-          <div>
-            <label className="field-label" htmlFor="s-fat">
+          <div className="col-3">
+            <label className="form-label" htmlFor="s-fat">
               Жиры
             </label>
             <input
               id="s-fat"
-              className="field"
+              className="form-control text-center"
               type="number"
               inputMode="numeric"
               value={draft.fat}
               onChange={(e) => set('fat')(e.target.value)}
             />
           </div>
-          <div>
-            <label className="field-label" htmlFor="s-carbs">
+          <div className="col-3">
+            <label className="form-label" htmlFor="s-carbs">
               Углеводы
             </label>
             <input
               id="s-carbs"
-              className="field"
+              className="form-control text-center"
               type="number"
               inputMode="numeric"
               value={draft.carbs}
@@ -123,14 +123,14 @@ export function SettingsSheet({ settings, onSaved, onClose }: Props) {
             />
           </div>
         </div>
-        <p className="hint" style={{ marginTop: 10 }}>
-          Значения белков, жиров и углеводов — в граммах на день.
+        <p className="hint mt-2 mb-0">
+          Белки, жиры и углеводы — в граммах на день.
         </p>
       </section>
 
       <section className="settings-section">
-        <span className="label">Оформление</span>
-        <div className="theme-picker" style={{ marginTop: 12 }}>
+        <span className="ef-label">Оформление</span>
+        <div className="theme-picker mt-2">
           {themes.map(([key, label, icon]) => (
             <button
               key={key}
@@ -145,15 +145,10 @@ export function SettingsSheet({ settings, onSaved, onClose }: Props) {
         </div>
       </section>
 
-      {error && (
-        <div className="notice notice--danger" style={{ marginTop: 16 }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
 
       <button
-        className="btn btn--block btn--lg"
-        style={{ marginTop: 20 }}
+        className="btn btn-primary btn-lg w-100 mt-4"
         disabled={!valid || busy}
         onClick={() => void save()}
       >
@@ -166,6 +161,19 @@ export function SettingsSheet({ settings, onSaved, onClose }: Props) {
           'Сохранить настройки'
         )}
       </button>
-    </Sheet>
+
+      <section className="settings-section">
+        <span className="ef-label">Аккаунт</span>
+        <div className="d-flex align-items-center justify-content-between gap-3 mt-2">
+          <div>
+            <div style={{ fontWeight: 600 }}>{username}</div>
+            <div className="hint">Вход по логину и паролю</div>
+          </div>
+          <button className="btn btn-outline-secondary" onClick={onLogout}>
+            Выйти
+          </button>
+        </div>
+      </section>
+    </>
   );
 }

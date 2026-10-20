@@ -68,11 +68,12 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
     const parsed = dateSchema.safeParse((req.query as { date?: string }).date ?? '');
     const date = parsed.success ? parsed.data : new Date().toISOString().slice(0, 10);
 
+    const userId = req.user!.id;
     const rows = await query<EntryRow>(
-      `SELECT ${ENTRY_SELECT} FROM entries WHERE day = $1 ORDER BY id`,
-      [date],
+      `SELECT ${ENTRY_SELECT} FROM entries WHERE day = $1 AND user_id = $2 ORDER BY id`,
+      [date, userId],
     );
-    const settings = await getSettings();
+    const settings = await getSettings(userId);
 
     const entries = rows.map(mapEntry);
     const totals: Nutrition = { kcal: 0, protein: 0, fat: 0, carbs: 0 };
@@ -96,29 +97,6 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
     return { date, settings, totals, meals };
   });
 
-  app.get('/api/week', async (req) => {
-    const end = dateSchema.safeParse((req.query as { end?: string }).end ?? '');
-    const endDate = end.success ? end.data : new Date().toISOString().slice(0, 10);
-    const startDate = new Date(`${endDate}T00:00:00Z`);
-    startDate.setUTCDate(startDate.getUTCDate() - 6);
-    const start = startDate.toISOString().slice(0, 10);
-
-    const rows = await query<{ day: string; kcal: number }>(
-      `SELECT day::text AS day, ROUND(SUM(kcal100 * grams / 100))::float8 AS kcal
-       FROM entries WHERE day BETWEEN $1 AND $2 GROUP BY day ORDER BY day`,
-      [start, endDate],
-    );
-    const byDay = new Map(rows.map((r) => [r.day, r.kcal]));
-    const days: { date: string; kcal: number }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(`${start}T00:00:00Z`);
-      d.setUTCDate(d.getUTCDate() + i);
-      const iso = d.toISOString().slice(0, 10);
-      days.push({ date: iso, kcal: Math.round(byDay.get(iso) ?? 0) });
-    }
-    return { start, end: endDate, days };
-  });
-
   app.post('/api/entries', async (req, reply) => {
     const body = entryRow.safeParse(req.body);
     if (!body.success) {
@@ -126,10 +104,11 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
     }
     const { day, meal, productId, name, grams, nutrition } = body.data;
 
+    const userId = req.user!.id;
     const rows = await query<{ id: string }>(
-      `INSERT INTO entries (day, meal, product_id, name, grams, kcal100, protein100, fat100, carbs100)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-      [day, meal, productId ?? null, name, grams, nutrition.kcal, nutrition.protein, nutrition.fat, nutrition.carbs],
+      `INSERT INTO entries (day, meal, product_id, name, grams, kcal100, protein100, fat100, carbs100, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [day, meal, productId ?? null, name, grams, nutrition.kcal, nutrition.protein, nutrition.fat, nutrition.carbs, userId],
     );
     if (productId) {
       await query(`UPDATE products SET use_count = use_count + 1 WHERE id = $1`, [productId]);
@@ -146,19 +125,30 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: 'VALIDATION', issues: body.error.issues });
 
-    const current = await one<EntryRow>(`SELECT ${ENTRY_SELECT} FROM entries WHERE id = $1`, [id]);
+    const current = await one<EntryRow>(
+      `SELECT ${ENTRY_SELECT} FROM entries WHERE id = $1 AND user_id = $2`,
+      [id, req.user!.id],
+    );
     if (!current) return reply.code(404).send({ error: 'NOT_FOUND' });
 
     const grams = body.data.grams ?? Number(current.grams);
     const name = body.data.name ?? current.name;
 
-    await query(`UPDATE entries SET grams = $1, name = $2 WHERE id = $3`, [grams, name, id]);
+    await query(`UPDATE entries SET grams = $1, name = $2 WHERE id = $3 AND user_id = $4`, [
+      grams,
+      name,
+      id,
+      req.user!.id,
+    ]);
     return { id, grams, name };
   });
 
   app.delete('/api/entries/:id', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);
-    const removed = await one<{ id: string }>(`DELETE FROM entries WHERE id = $1 RETURNING id`, [id]);
+    const removed = await one<{ id: string }>(
+      `DELETE FROM entries WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user!.id],
+    );
     if (!removed) return reply.code(404).send({ error: 'NOT_FOUND' });
     return { ok: true };
   });

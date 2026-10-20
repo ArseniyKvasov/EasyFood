@@ -72,6 +72,52 @@ const migrations: Migration[] = [
       ON CONFLICT DO NOTHING;
     `,
   },
+  {
+    id: '003_auth',
+    sql: `
+      CREATE TABLE IF NOT EXISTS users (
+        id            BIGSERIAL PRIMARY KEY,
+        username      TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS users_username_uniq ON users (lower(username));
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        token      TEXT PRIMARY KEY,
+        user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        expires_at TIMESTAMPTZ NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
+
+      -- Служебная учётка владеет данными, созданными до появления аккаунтов.
+      INSERT INTO users (username, password_hash)
+      VALUES ('__legacy__', '!')
+      ON CONFLICT DO NOTHING;
+
+      -- Товары: NULL — общий каталог (Open Food Facts), иначе — личный продукт.
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;
+      UPDATE products SET user_id = (SELECT id FROM users WHERE username = '__legacy__')
+        WHERE source = 'own' AND user_id IS NULL;
+      CREATE INDEX IF NOT EXISTS products_user_idx ON products (user_id);
+
+      -- Записи всегда принадлежат пользователю.
+      ALTER TABLE entries ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;
+      UPDATE entries SET user_id = (SELECT id FROM users WHERE username = '__legacy__')
+        WHERE user_id IS NULL;
+      CREATE INDEX IF NOT EXISTS entries_user_day_idx ON entries (user_id, day);
+
+      -- Настройки: одна строка на пользователя.
+      ALTER TABLE settings DROP CONSTRAINT IF EXISTS settings_pkey;
+      ALTER TABLE settings DROP CONSTRAINT IF EXISTS settings_id_check;
+      ALTER TABLE settings DROP COLUMN IF EXISTS id;
+      ALTER TABLE settings ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;
+      UPDATE settings SET user_id = (SELECT id FROM users WHERE username = '__legacy__')
+        WHERE user_id IS NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS settings_user_uniq ON settings (user_id) WHERE user_id IS NOT NULL;
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

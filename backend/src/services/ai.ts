@@ -27,6 +27,58 @@ const num = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
+const RECOGNITION_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    grams: { type: 'number' },
+    kcal: { type: 'number' },
+    protein: { type: 'number' },
+    fat: { type: 'number' },
+    carbs: { type: 'number' },
+    confidence: { type: 'number' },
+  },
+  required: ['name', 'grams', 'kcal', 'protein', 'fat', 'carbs', 'confidence'],
+  additionalProperties: false,
+} as const;
+
+const buildBody = (imageDataUrl: string): Record<string, unknown> => {
+  const body: Record<string, unknown> = {
+    model: config.ai.model,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: PROMPT },
+          { type: 'image_url', image_url: { url: imageDataUrl, detail: 'low' } },
+        ],
+      },
+    ],
+  };
+
+  // Claude Haiku 5.5 отклоняет temperature, отличный от 1, — поле не отправляем.
+  if (config.ai.temperature !== undefined) {
+    body.temperature = config.ai.temperature;
+  }
+  if (config.ai.maxTokens !== undefined) {
+    body.max_tokens = config.ai.maxTokens;
+  }
+  // Уровень «размышления» для reasoning-моделей (OpenRouter: reasoning.effort).
+  if (config.ai.reasoningEffort) {
+    body.reasoning = { effort: config.ai.reasoningEffort };
+  }
+  if (config.ai.responseFormat === 'json_schema') {
+    body.response_format = {
+      type: 'json_schema',
+      json_schema: { name: 'dish', strict: true, schema: RECOGNITION_SCHEMA },
+    };
+  } else {
+    body.response_format = { type: 'json_object' };
+  }
+
+  return body;
+};
+
 export async function recognizeDish(imageDataUrl: string): Promise<Recognition> {
   if (!config.ai.apiKey) {
     throw Object.assign(new Error('AI_NOT_CONFIGURED'), { statusCode: 501 });
@@ -44,20 +96,7 @@ export async function recognizeDish(imageDataUrl: string): Promise<Recognition> 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.ai.apiKey}`,
       },
-      body: JSON.stringify({
-        model: config.ai.model,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: PROMPT },
-              { type: 'image_url', image_url: { url: imageDataUrl, detail: 'low' } },
-            ],
-          },
-        ],
-      }),
+      body: JSON.stringify(buildBody(imageDataUrl)),
       signal: ctrl.signal,
     });
 
