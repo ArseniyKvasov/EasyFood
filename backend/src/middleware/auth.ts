@@ -18,6 +18,11 @@ export async function authHook(app: FastifyInstance): Promise<void> {
     if (req.method === 'OPTIONS') return;
 
     const path = req.url.split('?')[0];
+
+    // Статика и оболочка SPA публичны: в них нет пользовательских данных,
+    // всё содержимое подгружается через защищённые /api/*.
+    if (!path.startsWith('/api/')) return;
+
     if (PUBLIC_PATHS.has(path)) return;
 
     const token = parseCookies(req.headers.cookie).ef_session;
