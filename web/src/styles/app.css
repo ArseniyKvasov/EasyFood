@@ -928,6 +928,25 @@ h6 {
   color: var(--accent);
   box-shadow: var(--shadow-xs);
 }
+.photo-note {
+  margin-bottom: 0.75rem;
+}
+.photo-note textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+.photo-note__counter {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  text-align: right;
+  margin: 0.25rem 0 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+.photo-note__counter.is-warning {
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .photo-preview {
   width: 100%;
   border-radius: var(--r-lg);

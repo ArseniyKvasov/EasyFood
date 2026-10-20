@@ -111,5 +111,6 @@ export const api = {
 
   aiStatus: () => request<{ enabled: boolean }>('/api/recognize/status'),
 
-  recognize: (image: string) => request<Recognition>('/api/recognize', json({ image })),
+  recognize: (image: string, note?: string) =>
+    request<Recognition>('/api/recognize', json({ image, note })),
 };

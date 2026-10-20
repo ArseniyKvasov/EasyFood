@@ -42,14 +42,19 @@ const RECOGNITION_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const buildBody = (imageDataUrl: string): Record<string, unknown> => {
+const buildBody = (imageDataUrl: string, note?: string): Record<string, unknown> => {
+  // Описание пользователя уточняет состав — отдаём его модели как подсказку.
+  const prompt = note
+    ? `${PROMPT}\n\nПользователь описал блюдо: «${note}». Учитывай это описание при определении названия, состава и веса порции.`
+    : PROMPT;
+
   const body: Record<string, unknown> = {
     model: config.ai.model,
     messages: [
       {
         role: 'user',
         content: [
-          { type: 'text', text: PROMPT },
+          { type: 'text', text: prompt },
           { type: 'image_url', image_url: { url: imageDataUrl, detail: 'low' } },
         ],
       },
@@ -79,7 +84,7 @@ const buildBody = (imageDataUrl: string): Record<string, unknown> => {
   return body;
 };
 
-export async function recognizeDish(imageDataUrl: string): Promise<Recognition> {
+export async function recognizeDish(imageDataUrl: string, note?: string): Promise<Recognition> {
   if (!config.ai.apiKey) {
     throw Object.assign(new Error('AI_NOT_CONFIGURED'), { statusCode: 501 });
   }
@@ -96,7 +101,7 @@ export async function recognizeDish(imageDataUrl: string): Promise<Recognition> 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.ai.apiKey}`,
       },
-      body: JSON.stringify(buildBody(imageDataUrl)),
+      body: JSON.stringify(buildBody(imageDataUrl, note)),
       signal: ctrl.signal,
     });
 

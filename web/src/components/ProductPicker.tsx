@@ -21,6 +21,9 @@ const BarcodeScanner = lazy(() =>
 
 type Tab = 'search' | 'barcode' | 'photo';
 
+/** Ограничение на текстовое описание блюда. */
+const NOTE_MAX_LENGTH = 500;
+
 type Props = {
   meal: MealId;
   mealName: string;
@@ -49,6 +52,7 @@ export function ProductPicker({
   const [codeBusy, setCodeBusy] = useState(false);
 
   const [photo, setPhoto] = useState<string | null>(null);
+  const [note, setNote] = useState('');
   const [recognizing, setRecognizing] = useState(false);
   const [recognition, setRecognition] = useState<Recognition | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -134,7 +138,7 @@ export function ProductPicker({
     setRecognizing(true);
     setAiError(null);
     try {
-      const result = await api.recognize(photo);
+      const result = await api.recognize(photo, note.trim() || undefined);
       setRecognition(result);
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
@@ -208,6 +212,35 @@ export function ProductPicker({
           {photo ? (
             <>
               <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+
+              {!recognition && (
+                <div className="photo-note">
+                  <label className="form-label" htmlFor="photo-note">
+                    Описание блюда (необязательно)
+                  </label>
+                  <textarea
+                    id="photo-note"
+                    className="form-control"
+                    rows={2}
+                    maxLength={NOTE_MAX_LENGTH}
+                    placeholder="Например: гречка с куриной грудкой и овощами"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                  <div
+                    className={`photo-note__counter${
+                      note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
+                    }`}
+                  >
+                    {note.length} / {NOTE_MAX_LENGTH}
+                  </div>
+                  <p className="hint mb-0">
+                    Описание поможет точнее определить состав — например, если на фото не видно всех
+                    ингредиентов.
+                  </p>
+                </div>
+              )}
+
               {recognition ? (
                 <div className="card mb-3">
                   <div className="card-body">

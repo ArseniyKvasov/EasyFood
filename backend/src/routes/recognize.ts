@@ -5,6 +5,7 @@ import { recognizeDish } from '../services/ai.js';
 
 const bodySchema = z.object({
   image: z.string().min(100).max(8_000_000),
+  note: z.string().trim().max(500).optional(),
 });
 
 export async function recognizeRoutes(app: FastifyInstance): Promise<void> {
@@ -22,7 +23,7 @@ export async function recognizeRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: 'VALIDATION', issues: body.error.issues });
     }
     try {
-      const result = await recognizeDish(body.data.image);
+      const result = await recognizeDish(body.data.image, body.data.note);
       return result;
     } catch (err) {
       const statusCode = (err as { statusCode?: number }).statusCode ?? 500;
