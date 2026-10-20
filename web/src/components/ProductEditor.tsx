@@ -134,6 +134,12 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
 
   return (
     <>
+      {!product && prefill.barcode && (
+        <p className="hint mb-3">
+          Штрихкод <b>{prefill.barcode}</b> уже подставлен — осталось вписать название и КБЖУ.
+        </p>
+      )}
+
       <label className="form-label" htmlFor="p-name">
         Название
       </label>
@@ -143,6 +149,7 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
         value={form.name}
         placeholder="Например, гречка варёная"
         onChange={(e) => set('name')(e.target.value)}
+        autoFocus={!product}
       />
 
       <span className="form-label d-block">Значения на 100 г</span>

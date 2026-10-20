@@ -174,15 +174,15 @@ export function ProductPicker({
           {codeMiss && (
             <>
               <div className="alert alert-danger mt-3 mb-0">
-                Продукт со штрихкодом {codeMiss} не найден. Создайте его вручную — значения потом можно
-                будет уточнить.
+                Продукт со штрихкодом {codeMiss} не найден. Добавьте его в базу — останется вписать
+                название и КБЖУ.
               </div>
               <button
                 className="btn btn-primary w-100 mt-2"
                 onClick={() => onCreate({ barcode: codeMiss })}
               >
                 <IconPlus size={17} />
-                Создать продукт
+                Добавить продукт
               </button>
             </>
           )}
@@ -399,11 +399,19 @@ type BarcodePaneProps = {
 
 function BarcodePane({ code, busy, onCode, onDetect, onSubmit }: BarcodePaneProps) {
   const [scanning, setScanning] = useState(true);
+
+  // Камера сворачивается сразу после скана: так сразу видно,
+  // нашёлся продукт или нет, и не нужно гасить камеру вручную.
+  const handleDetect = (value: string) => {
+    setScanning(false);
+    onDetect(value);
+  };
+
   return (
     <>
       {scanning ? (
         <>
-          <BarcodeLive onDetected={onDetect} />
+          <BarcodeLive onDetected={handleDetect} />
           <button
             className="btn btn-outline-secondary w-100 mb-3"
             onClick={() => setScanning(false)}
