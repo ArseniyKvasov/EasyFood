@@ -19,7 +19,7 @@ export function Header({ date, theme, onPrev, onNext, onToday, onTheme, onSettin
           <span className="brand__mark">
             <IconLeaf size={19} />
           </span>
-          <span>EasyFood</span>
+          <span className="brand__text">EasyFood</span>
         </div>
 
         <div className="datenav">

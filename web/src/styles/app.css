@@ -1341,7 +1341,7 @@ ul {
     padding: 9px 12px;
     gap: 8px;
   }
-  .brand span {
+  .brand__text {
     display: none;
   }
   .datenav {
@@ -1352,8 +1352,16 @@ ul {
     font-size: var(--fs-sm);
   }
   .ring {
-    width: 190px;
-    height: 190px;
+    width: 200px;
+    height: 200px;
+  }
+  .ring__badge {
+    margin-top: 10px;
+    padding: 4px 10px;
+    font-size: var(--fs-xs);
+  }
+  .ring__value {
+    font-size: 34px;
   }
 }
 
