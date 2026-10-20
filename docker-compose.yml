@@ -1,0 +1,49 @@
+name: easyfood
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: easyfood-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-easyfood}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-easyfood}
+      POSTGRES_DB: ${POSTGRES_DB:-easyfood}
+    volumes:
+      - easyfood-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easyfood} -d ${POSTGRES_DB:-easyfood}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: easyfood-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-easyfood}:${POSTGRES_PASSWORD:-easyfood}@db:5432/${POSTGRES_DB:-easyfood}
+      CORS_ORIGIN: ${CORS_ORIGIN:-}
+      OPEN_FOOD_FACTS_ENABLED: ${OPEN_FOOD_FACTS_ENABLED:-true}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  easyfood-db:

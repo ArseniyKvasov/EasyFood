@@ -1,0 +1,476 @@
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { api, ApiError } from '../api';
+import { fileToDataUrl } from '../lib/image';
+import { num } from '../lib/format';
+import type { MealId, Product, Recognition } from '../types';
+import { Sheet } from './Sheet';
+import {
+  IconBarcode,
+  IconCamera,
+  IconCheck,
+  IconImage,
+  IconPencil,
+  IconPlus,
+  IconSearch,
+  IconSparkles,
+} from './Icons';
+
+// ZXing весит заметно — грузим только когда пользователь открывает вкладку со сканером.
+const BarcodeScanner = lazy(() =>
+  import('./BarcodeScanner').then((m) => ({ default: m.BarcodeScanner })),
+);
+
+type Tab = 'search' | 'barcode' | 'photo';
+
+type Props = {
+  meal: MealId;
+  mealName: string;
+  refreshToken: number;
+  onPick: (product: Product) => void;
+  onEdit: (product: Product) => void;
+  onCreate: (prefill: { name?: string; barcode?: string }) => void;
+  onClose: () => void;
+};
+
+export function ProductPicker({
+  meal,
+  mealName,
+  refreshToken,
+  onPick,
+  onEdit,
+  onCreate,
+  onClose,
+}: Props) {
+  const [tab, setTab] = useState<Tab>('search');
+  const [query, setQuery] = useState('');
+  const [local, setLocal] = useState<Product[]>([]);
+  const [remote, setRemote] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const [code, setCode] = useState('');
+  const [codeMiss, setCodeMiss] = useState<string | null>(null);
+  const [codeBusy, setCodeBusy] = useState(false);
+
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognition, setRecognition] = useState<Recognition | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    api
+      .aiStatus()
+      .then((s) => setAiEnabled(s.enabled))
+      .catch(() => setAiEnabled(false));
+  }, []);
+
+  // Поиск: локальная база + Open Food Facts как дополнение.
+  useEffect(() => {
+    const q = query.trim();
+    const id = ++requestId.current;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const own = await api.getProducts(q);
+        if (id !== requestId.current) return;
+        setLocal(own.products);
+        if (q.length >= 2) {
+          try {
+            const res = await api.getRemoteProducts(q);
+            if (id !== requestId.current) return;
+            setRemote(res.products);
+          } catch {
+            if (id === requestId.current) setRemote([]);
+          }
+        } else {
+          setRemote([]);
+        }
+      } catch {
+        if (id === requestId.current) setLocal([]);
+      } finally {
+        if (id === requestId.current) setLoading(false);
+      }
+    }, 260);
+    return () => window.clearTimeout(timer);
+  }, [query, refreshToken]);
+
+  const results = useMemo(() => {
+    const seen = new Set(local.map((p) => p.id));
+    return [...local, ...remote.filter((p) => !seen.has(p.id))];
+  }, [local, remote]);
+
+  const lookupCode = useCallback(
+    async (raw: string) => {
+      const value = raw.replace(/\D/g, '');
+      if (value.length < 8) {
+        setCodeMiss(raw);
+        return;
+      }
+      setCodeBusy(true);
+      setCodeMiss(null);
+      try {
+        const res = await api.getProductByBarcode(value);
+        onPick(res.product);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          setCodeMiss(value);
+        } else {
+          setCodeMiss(value);
+        }
+      } finally {
+        setCodeBusy(false);
+      }
+    },
+    [onPick],
+  );
+
+  const pickPhoto = async (file: File) => {
+    setAiError(null);
+    setRecognition(null);
+    try {
+      setPhoto(await fileToDataUrl(file));
+    } catch {
+      setAiError('Не удалось прочитать файл.');
+    }
+  };
+
+  const recognize = async () => {
+    if (!photo) return;
+    setRecognizing(true);
+    setAiError(null);
+    try {
+      const result = await api.recognize(photo);
+      setRecognition(result);
+    } catch (err) {
+      setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
+    } finally {
+      setRecognizing(false);
+    }
+  };
+
+  const useRecognition = async () => {
+    if (!recognition) return;
+    const product = await api.createProduct({
+      name: recognition.name,
+      kcal: Math.round(recognition.nutrition.kcal),
+      protein: Math.round(recognition.nutrition.protein * 10) / 10,
+      fat: Math.round(recognition.nutrition.fat * 10) / 10,
+      carbs: Math.round(recognition.nutrition.carbs * 10) / 10,
+      servingG: recognition.grams,
+      source: 'ai',
+    });
+    onPick({ ...product, servingG: recognition.grams });
+  };
+
+  const body = () => {
+    if (tab === 'barcode') {
+      return (
+        <>
+          <BarcodePane
+            code={code}
+            busy={codeBusy}
+            onCode={setCode}
+            onDetect={(v) => {
+              setCode(v);
+              void lookupCode(v);
+            }}
+            onSubmit={() => void lookupCode(code)}
+          />
+          {codeMiss && (
+            <div className="notice notice--danger" style={{ marginTop: 12 }}>
+              Продукт со штрихкодом {codeMiss} не найден. Создайте его вручную — значения потом можно будет
+              уточнить.
+            </div>
+          )}
+          {codeMiss && (
+            <button
+              className="btn btn--block"
+              style={{ marginTop: 10 }}
+              onClick={() => onCreate({ barcode: codeMiss })}
+            >
+              <IconPlus size={17} />
+              Создать продукт
+            </button>
+          )}
+        </>
+      );
+    }
+
+    if (tab === 'photo') {
+      return (
+        <>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void pickPhoto(file);
+              e.target.value = '';
+            }}
+          />
+          {photo ? (
+            <>
+              <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+              {recognition ? (
+                <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <IconSparkles size={17} />
+                    <b style={{ fontSize: 15 }}>{recognition.name}</b>
+                    <span className="badge badge--ai">
+                      уверенность {Math.round(recognition.confidence * 100)}%
+                    </span>
+                  </div>
+                  <p className="hint">
+                    {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
+                    {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
+                    {num(recognition.nutrition.carbs, 1)}
+                  </p>
+                  <button className="btn btn--block" style={{ marginTop: 12 }} onClick={() => void useRecognition()}>
+                    <IconCheck />
+                    Добавить в «{mealName}»
+                  </button>
+                  <button
+                    className="btn btn--ghost btn--block"
+                    style={{ marginTop: 8 }}
+                    onClick={() => setRecognition(null)}
+                  >
+                    Распознать заново
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn btn--block"
+                  onClick={() => void recognize()}
+                  disabled={recognizing || !aiEnabled}
+                >
+                  {recognizing ? (
+                    <>
+                      <span className="spinner" />
+                      Распознаём…
+                    </>
+                  ) : (
+                    <>
+                      <IconSparkles size={17} />
+                      Распознать блюдо
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                className="btn btn--ghost btn--block"
+                style={{ marginTop: 8 }}
+                onClick={() => fileRef.current?.click()}
+              >
+                Другое фото
+              </button>
+            </>
+          ) : (
+            <button className="dropzone" onClick={() => fileRef.current?.click()}>
+              <span className="dropzone__icon">
+                <IconCamera size={22} />
+              </span>
+              <b>Сфотографировать блюдо</b>
+              <span className="hint">ИИ определит продукт и порцию</span>
+            </button>
+          )}
+
+          {aiError && (
+            <div className="notice notice--danger" style={{ marginTop: 12 }}>
+              {aiError}
+            </div>
+          )}
+          {!aiEnabled && (
+            <p className="hint" style={{ marginTop: 12 }}>
+              Распознавание по фото не настроено на сервере. Добавьте ключ <code>OPENAI_API_KEY</code> или
+              заполните продукт вручную.
+            </p>
+          )}
+        </>
+      );
+    }
+
+    return (
+      <>
+        <div className="search-field">
+          <IconSearch />
+          <input
+            className="field"
+            placeholder="Название продукта"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div className="list-head">
+          {query.trim() ? 'Результаты' : 'Часто используете'}
+          {loading && ' · обновляем…'}
+        </div>
+
+        {results.length === 0 && !loading ? (
+          <div className="empty">
+            {query.trim() ? 'Ничего не найдено' : 'Пока нет продуктов'}
+            <br />
+            <span className="hint">Создайте свой продукт — он сохранится навсегда</span>
+          </div>
+        ) : (
+          <div>
+            {results.map((p) => (
+              <button key={p.id} className="product" onClick={() => onPick(p)}>
+                <span className="product__body">
+                  <span className="product__name">
+                    {p.name}
+                    {p.source === 'own' && <span className="badge">свой</span>}
+                    {p.source === 'ai' && <span className="badge badge--ai">ИИ</span>}
+                    {p.source === 'off' && <span className="badge badge--off">OFF</span>}
+                  </span>
+                  <span className="product__meta">
+                    {num(p.kcal)} ккал · Б {num(p.protein, 1)} · Ж {num(p.fat, 1)} · У {num(p.carbs, 1)} на
+                    100 г
+                  </span>
+                </span>
+                <span
+                  className="product__edit"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Редактировать продукт"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit(p);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onEdit(p);
+                    }
+                  }}
+                >
+                  <IconPencil />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <button
+          className="btn btn--soft btn--block"
+          style={{ marginTop: 16 }}
+          onClick={() => onCreate({ name: query.trim() })}
+        >
+          <IconPlus size={17} />
+          Создать продукт
+        </button>
+      </>
+    );
+  };
+
+  return (
+    <Sheet
+      title={`Добавить в «${mealName}»`}
+      onClose={onClose}
+      belowTitle={<Tabs tab={tab} onTab={setTab} />}
+    >
+      {body()}
+    </Sheet>
+  );
+}
+
+function Tabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+  const items: [Tab, string, ReactNode][] = [
+    ['search', 'Поиск', <IconSearch key="s" size={15} />],
+    ['barcode', 'Штрихкод', <IconBarcode key="b" size={15} />],
+    ['photo', 'Фото', <IconImage key="p" size={15} />],
+  ];
+  return (
+    <div className="segmented" style={{ padding: '3px 14px 0' }}>
+      {items.map(([key, label, icon]) => (
+        <button key={key} aria-selected={tab === key} onClick={() => onTab(key)}>
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}
+          >
+            {icon}
+            {label}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+type BarcodePaneProps = {
+  code: string;
+  busy: boolean;
+  onCode: (v: string) => void;
+  onDetect: (v: string) => void;
+  onSubmit: () => void;
+};
+
+function BarcodePane({ code, busy, onCode, onDetect, onSubmit }: BarcodePaneProps) {
+  const [scanning, setScanning] = useState(true);
+  return (
+    <>
+      {scanning ? (
+        <>
+          <BarcodeLive onDetected={onDetect} />
+          <button
+            className="btn btn--ghost btn--block"
+            style={{ marginBottom: 12 }}
+            onClick={() => setScanning(false)}
+          >
+            Выключить камеру
+          </button>
+        </>
+      ) : (
+        <button
+          className="btn btn--ghost btn--block"
+          style={{ marginBottom: 12 }}
+          onClick={() => setScanning(true)}
+        >
+          <IconCamera size={17} />
+          Включить камеру
+        </button>
+      )}
+      <input
+        className="field"
+        inputMode="numeric"
+        placeholder="Или введите цифры штрихкода"
+        value={code}
+        onChange={(e) => onCode(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSubmit();
+        }}
+      />
+      <button className="btn btn--block" onClick={onSubmit} disabled={busy}>
+        {busy ? (
+          <>
+            <span className="spinner" />
+            Ищем…
+          </>
+        ) : (
+          'Найти продукт'
+        )}
+      </button>
+    </>
+  );
+}
+
+/** Обёртка над сканером: держит камеру включённой, пока вкладка активна. */
+function BarcodeLive({ onDetected }: { onDetected: (code: string) => void }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="scanner">
+          <div className="scanner__placeholder">Запускаем камеру…</div>
+        </div>
+      }
+    >
+      <BarcodeScanner onDetected={onDetected} />
+    </Suspense>
+  );
+}

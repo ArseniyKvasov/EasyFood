@@ -1,0 +1,26 @@
+{
+  "name": "easyfood",
+  "version": "1.0.0",
+  "private": true,
+  "description": "EasyFood — дневник питания с калориями, БЖУ, сканером штрихкодов и распознаванием блюд по фото",
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm -w backend run dev",
+    "dev:web": "npm -w web run dev",
+    "build": "npm -w web run build && npm -w backend run build",
+    "start": "npm -w backend run start",
+    "typecheck": "npm -w backend run typecheck && npm -w web run typecheck",
+    "fonts": "node web/scripts/fetch-fonts.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
