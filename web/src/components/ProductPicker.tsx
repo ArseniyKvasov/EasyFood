@@ -33,6 +33,48 @@ type Props = {
   onCreate: (prefill: { name?: string; barcode?: string }) => void;
 };
 
+type CardProps = {
+  result: Recognition;
+  mealName: string;
+  onAdd: () => void;
+  secondaryLabel?: string;
+  onSecondary?: () => void;
+};
+
+/** Карточка распознанного блюда: состав, добавление и действие «сделать снова». */
+function RecognitionCard({
+  result,
+  mealName,
+  onAdd,
+  secondaryLabel,
+  onSecondary,
+}: CardProps) {
+  return (
+    <div className="card mt-3 mb-3">
+      <div className="card-body">
+        <div className="d-flex align-items-center gap-2 mb-2">
+          <IconSparkles size={17} className="flex-shrink-0" />
+          <b className="text-truncate recognition__name">{result.name}</b>
+        </div>
+        <p className="hint mb-3">
+          {num(result.grams)} г · {num(result.nutrition.kcal)} ккал на порцию · Б{' '}
+          {num(result.nutrition.protein, 1)} · Ж {num(result.nutrition.fat, 1)} · У{' '}
+          {num(result.nutrition.carbs, 1)}
+        </p>
+        <button className="btn btn-primary w-100" onClick={onAdd}>
+          <IconCheck />
+          Добавить в «{mealName}»
+        </button>
+        {secondaryLabel && onSecondary && (
+          <button className="btn btn-outline-secondary w-100 mt-2" onClick={onSecondary}>
+            {secondaryLabel}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ProductPicker({
   meal,
   mealName,
@@ -51,10 +93,18 @@ export function ProductPicker({
   const [codeMiss, setCodeMiss] = useState<string | null>(null);
   const [codeBusy, setCodeBusy] = useState(false);
 
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [note, setNote] = useState('');
+  // Фото и описание — два независимых режима: результат одного не переносится
+  // в другой, у каждого своё состояние.
+  const [photoState, setPhotoState] = useState({
+    image: null as string | null,
+    note: '',
+    result: null as Recognition | null,
+  });
+  const [textState, setTextState] = useState({
+    note: '',
+    result: null as Recognition | null,
+  });
   const [recognizing, setRecognizing] = useState(false);
-  const [recognition, setRecognition] = useState<Recognition | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiEnabled, setAiEnabled] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -126,20 +176,22 @@ export function ProductPicker({
 
   const pickPhoto = async (file: File) => {
     setAiError(null);
-    setRecognition(null);
     try {
-      setPhoto(await fileToDataUrl(file));
+      const image = await fileToDataUrl(file);
+      setPhotoState((s) => ({ ...s, image, result: null }));
     } catch {
       setAiError('Не удалось прочитать файл.');
     }
   };
 
   const recognizePhoto = async () => {
-    if (!photo) return;
+    const { image, note } = photoState;
+    if (!image) return;
     setRecognizing(true);
     setAiError(null);
     try {
-      setRecognition(await api.recognize(photo, note.trim() || undefined));
+      const result = await api.recognize(image, note.trim() || undefined);
+      setPhotoState((s) => ({ ...s, result }));
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
@@ -148,12 +200,13 @@ export function ProductPicker({
   };
 
   const recognizeText = async () => {
-    const text = note.trim();
+    const text = textState.note.trim();
     if (!text) return;
     setRecognizing(true);
     setAiError(null);
     try {
-      setRecognition(await api.recognizeByText(text));
+      const result = await api.recognizeByText(text);
+      setTextState((s) => ({ ...s, result }));
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
@@ -162,6 +215,7 @@ export function ProductPicker({
   };
 
   const useRecognition = async () => {
+    const recognition = tab === 'photo' ? photoState.result : textState.result;
     if (!recognition) return;
     const product = await api.createProduct({
       name: recognition.name,
@@ -211,6 +265,7 @@ export function ProductPicker({
     }
 
     if (tab === 'photo') {
+      const { image, note, result } = photoState;
       return (
         <>
           {/* Без атрибута capture: система сама предлагает
@@ -227,70 +282,56 @@ export function ProductPicker({
             }}
           />
 
-          {photo ? (
+          {image ? (
             <>
-              <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+              <img className="photo-preview" src={image} alt="Выбранное блюдо" />
 
-              {!recognition && (
-                <div className="photo-note">
-                  <label className="form-label" htmlFor="photo-note">
-                    Описание блюда (необязательно)
-                  </label>
-                  <textarea
-                    id="photo-note"
-                    className="form-control"
-                    rows={2}
-                    maxLength={NOTE_MAX_LENGTH}
-                    placeholder="Например: гречка с куриной грудкой и овощами"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                  <div
-                    className={`photo-note__counter${
-                      note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
-                    }`}
-                  >
-                    {note.length} / {NOTE_MAX_LENGTH}
-                  </div>
-                </div>
-              )}
-
-              {recognition ? (
-                <div className="card mb-3">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <IconSparkles size={17} className="flex-shrink-0" />
-                      <b className="text-truncate recognition__name">{recognition.name}</b>
-                    </div>
-                    <p className="hint mb-3">
-                      {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
-                      {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
-                      {num(recognition.nutrition.carbs, 1)}
-                    </p>
-                    <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
-                      <IconCheck />
-                      Добавить в «{mealName}»
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  className="btn btn-primary w-100"
-                  onClick={() => void recognizePhoto()}
-                  disabled={recognizing || !aiEnabled}
+              <div className="photo-note">
+                <label className="form-label" htmlFor="photo-note">
+                  Описание блюда (необязательно)
+                </label>
+                <textarea
+                  id="photo-note"
+                  className="form-control"
+                  rows={2}
+                  maxLength={NOTE_MAX_LENGTH}
+                  placeholder="Например: гречка с куриной грудкой и овощами"
+                  value={note}
+                  onChange={(e) => setPhotoState((s) => ({ ...s, note: e.target.value }))}
+                />
+                <div
+                  className={`photo-note__counter${
+                    note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
+                  }`}
                 >
-                  {recognizing ? (
-                    <>
-                      <span className="spinner" />
-                      Распознаём…
-                    </>
-                  ) : (
-                    <>
-                      <IconSparkles size={17} />
-                      Распознать блюдо
-                    </>
-                  )}
-                </button>
+                  {note.length} / {NOTE_MAX_LENGTH}
+                </div>
+              </div>
+
+              <button
+                className="btn btn-primary w-100 mt-3"
+                onClick={() => void recognizePhoto()}
+                disabled={recognizing || !aiEnabled}
+              >
+                {recognizing ? (
+                  <>
+                    <span className="spinner" />
+                    Распознаём…
+                  </>
+                ) : (
+                  <>
+                    <IconSparkles size={17} />
+                    Распознать блюдо
+                  </>
+                )}
+              </button>
+
+              {result && (
+                <RecognitionCard
+                  result={result}
+                  mealName={mealName}
+                  onAdd={() => void useRecognition()}
+                />
               )}
 
               <button
@@ -322,6 +363,7 @@ export function ProductPicker({
     }
 
     if (tab === 'text') {
+      const { note, result } = textState;
       const hasNote = note.trim().length > 0;
       return (
         <>
@@ -336,7 +378,7 @@ export function ProductPicker({
               maxLength={NOTE_MAX_LENGTH}
               placeholder="Например: гречка с куриной грудкой и овощами, около 300 грамм"
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={(e) => setTextState((s) => ({ ...s, note: e.target.value }))}
               autoFocus
             />
             <div
@@ -348,42 +390,32 @@ export function ProductPicker({
             </div>
           </div>
 
-          {recognition ? (
-            <div className="card mt-3 mb-3">
-              <div className="card-body">
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <IconSparkles size={17} className="flex-shrink-0" />
-                  <b className="text-truncate recognition__name">{recognition.name}</b>
-                </div>
-                <p className="hint mb-3">
-                  {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
-                  {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
-                  {num(recognition.nutrition.carbs, 1)}
-                </p>
-                <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
-                  <IconCheck />
-                  Добавить в «{mealName}»
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              className="btn btn-primary w-100 mt-3"
-              onClick={() => void recognizeText()}
-              disabled={recognizing || !aiEnabled || !hasNote}
-            >
-              {recognizing ? (
-                <>
-                  <span className="spinner" />
-                  Распознаём…
-                </>
-              ) : (
-                <>
-                  <IconSparkles size={17} />
-                  Распознать по описанию
-                </>
-              )}
-            </button>
+          <button
+            className="btn btn-primary w-100 mt-3"
+            onClick={() => void recognizeText()}
+            disabled={recognizing || !aiEnabled || !hasNote}
+          >
+            {recognizing ? (
+              <>
+                <span className="spinner" />
+                Определяем…
+              </>
+            ) : (
+              <>
+                <IconSparkles size={17} />
+                Определить КБЖУ
+              </>
+            )}
+          </button>
+
+          {result && (
+            <RecognitionCard
+              result={result}
+              mealName={mealName}
+              onAdd={() => void useRecognition()}
+              secondaryLabel="Пересчитать"
+              onSecondary={() => void recognizeText()}
+            />
           )}
 
           {aiError && <div className="alert alert-danger mt-3 mb-0">{aiError}</div>}
@@ -396,6 +428,7 @@ export function ProductPicker({
         </>
       );
     }
+
 
     return (
       <>
