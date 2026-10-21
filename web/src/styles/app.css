@@ -1051,6 +1051,16 @@ h6 {
   font-weight: 700;
   padding: 0.6rem;
 }
+/* Свои кнопки ± уже есть — штатные стрелки браузера только мешают. */
+.grams-input input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.grams-input input[type='number']::-webkit-outer-spin-button,
+.grams-input input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .stepper {
   width: 46px;
   height: 52px;

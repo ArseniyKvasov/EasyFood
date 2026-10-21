@@ -23,10 +23,14 @@ export function GramsSheet({
   onDelete,
   onEditProduct,
 }: Props) {
-  const [grams, setGrams] = useState(initialGrams);
+  // Храним строку, а не число: иначе при очистке поля Number('') даёт 0
+  // и значение сразу возвращается — удалить цифры невозможно.
+  const [gramsText, setGramsText] = useState(String(initialGrams));
   const [remembered, setRemembered] = useState<number[]>([]);
 
-  useEffect(() => setGrams(initialGrams), [initialGrams, product.id]);
+  const grams = Number(gramsText) || 0;
+
+  useEffect(() => setGramsText(String(initialGrams)), [initialGrams, product.id]);
 
   // Веса, с которыми этот продукт добавляли раньше, — предлагаем их первыми.
   useEffect(() => {
@@ -89,7 +93,7 @@ export function GramsSheet({
       <div className="grams-input">
         <button
           className="stepper"
-          onClick={() => setGrams((g) => Math.max(0, g - 10))}
+          onClick={() => setGramsText(String(Math.max(0, grams - 10)))}
           aria-label="Уменьшить на 10 грамм"
         >
           −
@@ -101,12 +105,12 @@ export function GramsSheet({
           inputMode="decimal"
           min={0}
           max={5000}
-          value={grams}
-          onChange={(e) => setGrams(Number(e.target.value))}
+          value={gramsText}
+          onChange={(e) => setGramsText(e.target.value)}
         />
         <button
           className="stepper"
-          onClick={() => setGrams((g) => Math.min(5000, g + 10))}
+          onClick={() => setGramsText(String(Math.min(5000, grams + 10)))}
           aria-label="Увеличить на 10 грамм"
         >
           +
@@ -115,7 +119,12 @@ export function GramsSheet({
 
       <div className="chips">
         {presets.map((p) => (
-          <button key={p} className="chip" aria-pressed={p === grams} onClick={() => setGrams(p)}>
+          <button
+            key={p}
+            className="chip"
+            aria-pressed={p === grams}
+            onClick={() => setGramsText(String(p))}
+          >
             {p} г
           </button>
         ))}
