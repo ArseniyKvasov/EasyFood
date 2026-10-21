@@ -116,4 +116,7 @@ export const api = {
 
   recognize: (image: string, note?: string) =>
     request<Recognition>('/api/recognize', json({ image, note })),
+
+  recognizeByText: (description: string) =>
+    request<Recognition>('/api/recognize/text', json({ description })),
 };

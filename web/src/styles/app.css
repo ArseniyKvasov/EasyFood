@@ -854,7 +854,10 @@ h6 {
   border-radius: var(--r-lg);
   overflow: hidden;
   background: #0a0f0a;
-  aspect-ratio: 4 / 3;
+  /* рамка подстраивается под соотношение сторон камеры */
+  aspect-ratio: var(--cam-ratio, 16 / 9);
+  max-height: 48dvh;
+  width: 100%;
   margin-bottom: 0.75rem;
 }
 .scanner video {
@@ -864,6 +867,16 @@ h6 {
   object-fit: contain;
   display: block;
   background: #0a0f0a;
+}
+/* Поток остался вертикальным, а телефон повёрнут — разворачиваем картинку
+   и меняем местами размеры, чтобы она заполнила рамку. */
+.scanner.is-rotated video {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--cam-stream-ratio, 0.5625) * 100%);
+  height: 100%;
+  transform: translate(-50%, -50%) rotate(90deg);
 }
 .scanner__frame {
   position: absolute;
@@ -948,6 +961,14 @@ h6 {
   color: var(--accent);
   box-shadow: var(--shadow-xs);
 }
+.photo-sources {
+  display: grid;
+  gap: 0.6rem;
+}
+.photo-sources .dropzone {
+  padding: 1.1rem 1rem;
+}
+
 .photo-note {
   margin-bottom: 0.75rem;
 }

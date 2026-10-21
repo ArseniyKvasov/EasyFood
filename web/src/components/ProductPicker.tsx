@@ -58,6 +58,7 @@ export function ProductPicker({
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiEnabled, setAiEnabled] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+  const galleryRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -134,11 +135,14 @@ export function ProductPicker({
   };
 
   const recognize = async () => {
-    if (!photo) return;
+    const text = note.trim();
+    if (!photo && !text) return;
     setRecognizing(true);
     setAiError(null);
     try {
-      const result = await api.recognize(photo, note.trim() || undefined);
+      const result = photo
+        ? await api.recognize(photo, text || undefined)
+        : await api.recognizeByText(text);
       setRecognition(result);
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
@@ -197,8 +201,18 @@ export function ProductPicker({
     }
 
     if (tab === 'photo') {
+      const hasNote = note.trim().length > 0;
+      const canRecognize = hasNote || photo !== null;
+      const actionLabel =
+        photo && hasNote
+          ? 'Распознать блюдо'
+          : photo
+            ? 'Распознать по фото'
+            : 'Распознать по описанию';
+
       return (
         <>
+          {/* Съёмка камерой */}
           <input
             ref={fileRef}
             type="file"
@@ -211,105 +225,139 @@ export function ProductPicker({
               e.target.value = '';
             }}
           />
+          {/* Выбор готового снимка из галереи */}
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void pickPhoto(file);
+              e.target.value = '';
+            }}
+          />
+
           {photo ? (
-            <>
-              <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+            <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+          ) : (
+            <div className="photo-sources">
+              <button className="dropzone" onClick={() => fileRef.current?.click()}>
+                <span className="dropzone__icon">
+                  <IconCamera size={22} />
+                </span>
+                <b>Сфотографировать</b>
+                <span className="hint">Наведите камеру на блюдо</span>
+              </button>
+              <button className="dropzone" onClick={() => galleryRef.current?.click()}>
+                <span className="dropzone__icon">
+                  <IconImage size={22} />
+                </span>
+                <b>Выбрать из галереи</b>
+                <span className="hint">Готовое фото на устройстве</span>
+              </button>
+            </div>
+          )}
 
-              {!recognition && (
-                <div className="photo-note">
-                  <label className="form-label" htmlFor="photo-note">
-                    Описание блюда (необязательно)
-                  </label>
-                  <textarea
-                    id="photo-note"
-                    className="form-control"
-                    rows={2}
-                    maxLength={NOTE_MAX_LENGTH}
-                    placeholder="Например: гречка с куриной грудкой и овощами"
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                  <div
-                    className={`photo-note__counter${
-                      note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
-                    }`}
-                  >
-                    {note.length} / {NOTE_MAX_LENGTH}
-                  </div>
-                  <p className="hint mb-0">
-                    Описание поможет точнее определить состав — например, если на фото не видно всех
-                    ингредиентов.
-                  </p>
-                </div>
-              )}
+          {!recognition && (
+            <div className="photo-note">
+              <label className="form-label" htmlFor="photo-note">
+                Описание блюда {photo ? '(необязательно)' : ''}
+              </label>
+              <textarea
+                id="photo-note"
+                className="form-control"
+                rows={2}
+                maxLength={NOTE_MAX_LENGTH}
+                placeholder="Например: гречка с куриной грудкой и овощами, около 300 грамм"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <div
+                className={`photo-note__counter${
+                  note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
+                }`}
+              >
+                {note.length} / {NOTE_MAX_LENGTH}
+              </div>
+              <p className="hint mb-0">
+                {photo
+                  ? 'Описание поможет точнее определить состав — например, если на фото не видно всех ингредиентов.'
+                  : 'Опишите блюдо словами — ИИ оценит состав и вес порции. Можно и без фото.'}
+              </p>
+            </div>
+          )}
 
-              {recognition ? (
-                <div className="card mb-3">
-                  <div className="card-body">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <IconSparkles size={17} />
-                      <b>{recognition.name}</b>
-                      <span className="badge badge-ai">
-                        уверенность {Math.round(recognition.confidence * 100)}%
-                      </span>
-                    </div>
-                    <p className="hint mb-3">
-                      {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
-                      {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
-                      {num(recognition.nutrition.carbs, 1)}
-                    </p>
-                    <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
-                      <IconCheck />
-                      Добавить в «{mealName}»
-                    </button>
-                    <button
-                      className="btn btn-outline-secondary w-100 mt-2"
-                      onClick={() => setRecognition(null)}
-                    >
-                      Распознать заново
-                    </button>
-                  </div>
+          {recognition ? (
+            <div className="card mt-3 mb-3">
+              <div className="card-body">
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <IconSparkles size={17} />
+                  <b>{recognition.name}</b>
+                  <span className="badge badge-ai">
+                    уверенность {Math.round(recognition.confidence * 100)}%
+                  </span>
                 </div>
-              ) : (
-                <button
-                  className="btn btn-primary w-100"
-                  onClick={() => void recognize()}
-                  disabled={recognizing || !aiEnabled}
-                >
-                  {recognizing ? (
-                    <>
-                      <span className="spinner" />
-                      Распознаём…
-                    </>
-                  ) : (
-                    <>
-                      <IconSparkles size={17} />
-                      Распознать блюдо
-                    </>
-                  )}
+                <p className="hint mb-3">
+                  {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
+                  {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
+                  {num(recognition.nutrition.carbs, 1)}
+                </p>
+                <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
+                  <IconCheck />
+                  Добавить в «{mealName}»
                 </button>
+                <button
+                  className="btn btn-outline-secondary w-100 mt-2"
+                  onClick={() => setRecognition(null)}
+                >
+                  Распознать заново
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              className="btn btn-primary w-100 mt-3"
+              onClick={() => void recognize()}
+              disabled={recognizing || !aiEnabled || !canRecognize}
+            >
+              {recognizing ? (
+                <>
+                  <span className="spinner" />
+                  Распознаём…
+                </>
+              ) : (
+                <>
+                  <IconSparkles size={17} />
+                  {actionLabel}
+                </>
               )}
+            </button>
+          )}
+
+          {photo && !recognition && (
+            <div className="d-flex gap-2 mt-2">
               <button
-                className="btn btn-outline-secondary w-100 mt-2"
+                className="btn btn-outline-secondary flex-grow-1"
                 onClick={() => fileRef.current?.click()}
               >
-                Другое фото
+                <IconCamera size={16} />
+                Переснять
               </button>
-            </>
-          ) : (
-            <button className="dropzone" onClick={() => fileRef.current?.click()}>
-              <span className="dropzone__icon">
-                <IconCamera size={22} />
-              </span>
-              <b>Сфотографировать блюдо</b>
-              <span className="hint">ИИ определит продукт и порцию</span>
-            </button>
+              <button
+                className="btn btn-outline-secondary flex-grow-1"
+                onClick={() => galleryRef.current?.click()}
+              >
+                <IconImage size={16} />
+                Из галереи
+              </button>
+            </div>
           )}
 
           {aiError && <div className="alert alert-danger mt-3 mb-0">{aiError}</div>}
           {!aiEnabled && (
             <p className="hint mt-3 mb-0">
-              Распознавание по фото не настроено на сервере. Добавьте ключ <code>OPENAI_API_KEY</code> или
+              Распознавание не настроено на сервере. Добавьте ключ <code>OPENAI_API_KEY</code> или
               заполните продукт вручную.
             </p>
           )}
@@ -406,7 +454,7 @@ function Tabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const items: [Tab, string, ReactNode][] = [
     ['search', 'Поиск', <IconSearch key="s" size={15} />],
     ['barcode', 'Штрихкод', <IconBarcode key="b" size={15} />],
-    ['photo', 'Фото', <IconImage key="p" size={15} />],
+    ['photo', 'ИИ', <IconSparkles key="p" size={15} />],
   ];
   return (
     <>
