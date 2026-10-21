@@ -54,10 +54,10 @@ function mapEntry(r: EntryRow): Entry {
 
 const ENTRY_SELECT = `
   id, day, meal, product_id, name, grams,
-  ROUND(kcal100 * grams / 100, 1)::float8 AS kcal,
-  ROUND(protein100 * grams / 100)::float8 AS protein,
-  ROUND(fat100 * grams / 100)::float8     AS fat,
-  ROUND(carbs100 * grams / 100)::float8   AS carbs,
+  ROUND(kcal100 * grams / 100)::float8    AS kcal,
+  ROUND(protein100 * grams / 100, 1)::float8 AS protein,
+  ROUND(fat100 * grams / 100, 1)::float8     AS fat,
+  ROUND(carbs100 * grams / 100, 1)::float8   AS carbs,
   kcal100::float8 AS kcal100,
   protein100::float8 AS protein100,
   fat100::float8 AS fat100,
