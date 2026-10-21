@@ -35,6 +35,10 @@ export default function App() {
   const [date, setDate] = useState(today());
   const [diary, setDiary] = useState<Diary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  // Тема живёт отдельно от настроек: пока они грузятся, settings ещё null,
+  // а ответ сервера может прийти устаревшим и откатить выбор пользователя.
+  const [theme, setTheme] = useState<Settings['theme']>('auto');
+  const themeChanged = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stack, setStack] = useState<SheetState[]>([]);
@@ -85,15 +89,32 @@ export default function App() {
     void load(date);
   }, [date, load, user]);
 
-  // Тема
+  // Подхватываем тему с сервера, только пока пользователь её не менял сам.
+  useEffect(() => {
+    if (settings && !themeChanged.current) setTheme(settings.theme);
+  }, [settings?.theme]);
+
+  // Применяем тему
   useEffect(() => {
     const root = document.documentElement;
-    if (settings?.theme === 'light' || settings?.theme === 'dark') {
-      root.setAttribute('data-theme', settings.theme);
+    if (theme === 'light' || theme === 'dark') {
+      root.setAttribute('data-theme', theme);
     } else {
       root.removeAttribute('data-theme');
     }
-  }, [settings?.theme]);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    const order: Settings['theme'][] = ['auto', 'light', 'dark'];
+    const next = order[(order.indexOf(theme) + 1) % order.length];
+    themeChanged.current = true;
+    setTheme(next);
+    // Ответ сервера игнорируем: тема уже применена, а устаревший ответ
+    // не должен откатывать выбор.
+    void api.updateSettings({ theme: next }).catch(() => {
+      setError('Не удалось сохранить тему.');
+    });
+  }, [theme]);
 
   // Блокируем прокрутку страницы, пока открыта шторка
   useEffect(() => {
@@ -334,6 +355,8 @@ export default function App() {
           settings={settings ?? { ...targets, theme: 'auto', onboarded: false }}
           onSaved={(s) => {
             setSettings(s);
+            themeChanged.current = true;
+            setTheme(s.theme);
             closeAll();
             pushToast('Настройки сохранены');
             void load(date, false);
@@ -368,17 +391,11 @@ export default function App() {
     <div className="app">
       <Header
         date={date}
-        theme={settings?.theme ?? 'auto'}
+        theme={theme}
         onPrev={() => setDate((d) => shiftDate(d, -1))}
         onNext={() => setDate((d) => shiftDate(d, 1))}
         onToday={() => setDate(today())}
-        onTheme={() => {
-          const order: Settings['theme'][] = ['auto', 'light', 'dark'];
-          const current = settings?.theme ?? 'auto';
-          const next = order[(order.indexOf(current) + 1) % order.length];
-          setSettings((s) => (s ? { ...s, theme: next } : s));
-          void api.updateSettings({ theme: next }).then((s) => setSettings(s));
-        }}
+        onTheme={toggleTheme}
         onSettings={() => push({ kind: 'settings' })}
       />
 
