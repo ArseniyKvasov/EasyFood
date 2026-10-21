@@ -49,6 +49,15 @@ function RecognitionCard({
   secondaryLabel,
   onSecondary,
 }: CardProps) {
+  // nutrition приходит в расчёте на 100 г, а показываем итог за порцию.
+  const k = result.grams / 100;
+  const portion = {
+    kcal: result.nutrition.kcal * k,
+    protein: result.nutrition.protein * k,
+    fat: result.nutrition.fat * k,
+    carbs: result.nutrition.carbs * k,
+  };
+
   return (
     <div className="card mt-3 mb-3">
       <div className="card-body">
@@ -57,9 +66,8 @@ function RecognitionCard({
           <b className="text-truncate recognition__name">{result.name}</b>
         </div>
         <p className="hint mb-3">
-          {num(result.grams)} г · {num(result.nutrition.kcal)} ккал на порцию · Б{' '}
-          {num(result.nutrition.protein, 1)} · Ж {num(result.nutrition.fat, 1)} · У{' '}
-          {num(result.nutrition.carbs, 1)}
+          {num(result.grams)} г · {num(portion.kcal)} ккал на порцию · Б {num(portion.protein, 1)} · Ж{' '}
+          {num(portion.fat, 1)} · У {num(portion.carbs, 1)}
         </p>
         <button className="btn btn-primary w-100" onClick={onAdd}>
           <IconCheck />
@@ -219,7 +227,9 @@ export function ProductPicker({
     if (!recognition) return;
     const product = await api.createProduct({
       name: recognition.name,
-      kcal: Math.round(recognition.nutrition.kcal),
+      // С десятичным знаком — иначе округление до целого «съедает»
+      // калории и итог по порции не совпадает с показанным в карточке.
+      kcal: Math.round(recognition.nutrition.kcal * 10) / 10,
       protein: Math.round(recognition.nutrition.protein * 10) / 10,
       fat: Math.round(recognition.nutrition.fat * 10) / 10,
       carbs: Math.round(recognition.nutrition.carbs * 10) / 10,
