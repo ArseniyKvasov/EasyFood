@@ -40,7 +40,7 @@ export function MealCard({ meal, onAdd, onEditEntry }: Props) {
                       {num(e.nutrition.carbs, 1)}
                     </span>
                   </span>
-                  <span className="entry__kcal">{num(e.nutrition.kcal)}</span>
+                  <span className="entry__kcal">{num(e.nutrition.kcal, 1)}</span>
                 </span>
               </button>
             ))}

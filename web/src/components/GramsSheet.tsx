@@ -132,7 +132,7 @@ export function GramsSheet({
 
       <div className="portion-preview">
         <div>
-          <b>{num(value.kcal)}</b>
+          <b>{num(value.kcal, 1)}</b>
           <span>ккал</span>
         </div>
         <div>
