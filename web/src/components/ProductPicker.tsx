@@ -332,10 +332,6 @@ export function ProductPicker({
             >
               {note.length} / {NOTE_MAX_LENGTH}
             </div>
-            <p className="hint mb-0">
-              Опишите блюдо словами — ИИ оценит состав и вес порции. Результат можно будет поправить
-              перед добавлением.
-            </p>
           </div>
 
           {recognition ? (
