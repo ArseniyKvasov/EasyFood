@@ -561,22 +561,21 @@ export function ProductPicker({
 
         {allResults.length === 0 && !loading ? (
           <div className="empty">
-            {query.trim() ? 'Ничего не найдено' : 'Пока нет продуктов'}
-            <br />
-            {suggestions.length > 0 ? (
-              <>
-                <span className="hint">Возможно, вы искали:</span>
-                <span className="suggestions">
-                  {suggestions.map((h) => (
-                    <button key={h} className="chip" onClick={() => setQuery(h)}>
-                      {h}
-                    </button>
-                  ))}
-                </span>
-              </>
-            ) : (
-              <span className="hint">Создайте свой продукт — он сохранится навсегда</span>
-            )}
+            <div className="empty__text">
+              {query.trim() ? 'Ничего не найдено' : 'Пока нет продуктов'}
+              {suggestions.length > 0 && (
+                <>
+                  <span className="hint">Возможно, вы искали:</span>
+                  <span className="suggestions">
+                    {suggestions.map((h) => (
+                      <button key={h} className="chip" onClick={() => setQuery(h)}>
+                        {h}
+                      </button>
+                    ))}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         ) : (
           <div>
