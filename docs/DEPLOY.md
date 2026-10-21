@@ -4,7 +4,7 @@
 
 | Параметр | Значение |
 |----------|----------|
-| Домен | `food.fastclass.online` |
+| Домен | `food.fastclass.ru` |
 | IP сервера | `194.87.52.231` |
 | Порт приложения на хосте | `127.0.0.1:8080` |
 | Репозиторий | `https://github.com/ArseniyKvasov/EasyFood.git` |
@@ -41,13 +41,13 @@ docker --version && docker compose version
 В панели регистратора (или у DNS-провайдера) создайте A-запись:
 
 ```
-food.fastclass.online.  A  194.87.52.231
+food.fastclass.ru.  A  194.87.52.231
 ```
 
 Проверка (подождите несколько минут на распространение):
 
 ```bash
-dig +short food.fastclass.online
+dig +short food.fastclass.ru
 # должно вернуть 194.87.52.231
 ```
 
@@ -113,6 +113,22 @@ OPENAI_RESPONSE_FORMAT=json_schema
 параметр не отправляется, и модель думает на своём дефолте (у Haiku 5.5 это
 `medium`).
 
+### RouterAI (оплата в рублях)
+
+RouterAI — OpenAI-совместимый шлюз с тем же каталогом моделей. Меняются
+только две строки:
+
+```bash
+OPENAI_BASE_URL=https://routerai.ru/api/v1
+OPENAI_MODEL=anthropic/claude-haiku-5.5
+```
+
+Ключ создаётся в https://routerai.ru/settings/keys, авторизация та же —
+`Authorization: Bearer <ключ>`. Модель обслуживают пять провайдеров (Anthropic,
+Azure, Google Vertex, AWS Bedrock, Claude Platform on AWS); `reasoning`
+поддерживают все, а `structured_outputs` (`json_schema`) — не все, поэтому при
+ошибках разбора JSON переключите `OPENAI_RESPONSE_FORMAT` на `json_object`.
+
 > Если доступ к репозиторию закрыт, используйте SSH-ключ:
 > `git clone git@github.com:ArseniyKvasov/EasyFood.git`
 
@@ -142,8 +158,8 @@ Let's Encrypt, которого ещё нет, и nginx не сможет зап
 ```bash
 apt install -y nginx
 mkdir -p /var/www/certbot
-cp deploy/nginx/food.fastclass.online.http.conf /etc/nginx/sites-available/food.fastclass.online
-ln -sf /etc/nginx/sites-available/food.fastclass.online /etc/nginx/sites-enabled/
+cp deploy/nginx/food.fastclass.ru.http.conf /etc/nginx/sites-available/food.fastclass.ru
+ln -sf /etc/nginx/sites-available/food.fastclass.ru /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 ```
@@ -151,7 +167,7 @@ nginx -t && systemctl reload nginx
 Проверка, что nginx работает и проксирует приложение:
 
 ```bash
-curl -I http://food.fastclass.online
+curl -I http://food.fastclass.ru
 ```
 
 ---
@@ -163,7 +179,7 @@ curl -I http://food.fastclass.online
 
 ```bash
 apt install -y certbot python3-certbot-nginx
-certbot --nginx -d food.fastclass.online --agree-tos -m admin@fastclass.online --redirect
+certbot --nginx -d food.fastclass.ru --agree-tos -m admin@fastclass.online --redirect
 systemctl enable --now certbot.timer
 ```
 
@@ -175,7 +191,7 @@ systemctl enable --now certbot.timer
 
 ```bash
 cd /opt/EasyFood
-cp deploy/nginx/food.fastclass.online.conf /etc/nginx/sites-available/food.fastclass.online
+cp deploy/nginx/food.fastclass.ru.conf /etc/nginx/sites-available/food.fastclass.ru
 nginx -t && systemctl reload nginx
 ```
 
@@ -187,8 +203,8 @@ nginx -t && systemctl reload nginx
 > ```bash
 > cd /opt/EasyFood
 > # 1) в stream-конфиг (/etc/nginx/stream-xray.conf) добавить в map строку
-> #    food.fastclass.online 127.0.0.1:8447;
-> #    и отдельный server (фрагмент — deploy/nginx/stream-food.fastclass.online.conf):
+> #    food.fastclass.ru 127.0.0.1:8447;
+> #    и отдельный server (фрагмент — deploy/nginx/stream-food.fastclass.ru.conf):
 > #      server {
 > #          listen 127.0.0.1:8447;
 > #          proxy_pass 127.0.0.1:8448;
@@ -196,20 +212,20 @@ nginx -t && systemctl reload nginx
 > #      }
 >
 > # 2) конфиг сайта на локальный порт
-> cp deploy/nginx/food.fastclass.online.sni.conf /etc/nginx/sites-available/food.fastclass.online
+> cp deploy/nginx/food.fastclass.ru.sni.conf /etc/nginx/sites-available/food.fastclass.ru
 > nginx -t && systemctl reload nginx
 > ```
 >
 > Проверка, что SNI-маршрут ведёт куда надо:
 >
 > ```bash
-> echo | openssl s_client -connect 127.0.0.1:443 -servername food.fastclass.online 2>/dev/null \
+> echo | openssl s_client -connect 127.0.0.1:443 -servername food.fastclass.ru 2>/dev/null \
 >   | openssl x509 -noout -subject
-> # должно быть: subject= CN = food.fastclass.online
+> # должно быть: subject= CN = food.fastclass.ru
 > ```
 ```
 
-Полный конфиг (`deploy/nginx/food.fastclass.online.conf`) делает две вещи:
+Полный конфиг (`deploy/nginx/food.fastclass.ru.conf`) делает две вещи:
 
 - на `:80` — ACME-challenge для выпуска сертификата и редирект на HTTPS;
 - на `:443` — основной прокси с длинным таймаутом (нужно для распознавания по фото).
@@ -224,13 +240,13 @@ systemctl list-timers | grep certbot
 Проверка:
 
 ```bash
-curl -I https://food.fastclass.online
+curl -I https://food.fastclass.ru
 ```
 
 > **Если `nginx -t` ругается на `unknown directive "http2"`** — версия nginx старше 1.25.1.
 > Конфиг в репозитории совместим со старыми версиями (`listen 443 ssl http2;`),
 > достаточно перезалить его:
-> `cp /opt/EasyFood/deploy/nginx/food.fastclass.online.conf /etc/nginx/sites-available/food.fastclass.online && nginx -t && systemctl reload nginx`
+> `cp /opt/EasyFood/deploy/nginx/food.fastclass.ru.conf /etc/nginx/sites-available/food.fastclass.ru && nginx -t && systemctl reload nginx`
 
 ---
 
