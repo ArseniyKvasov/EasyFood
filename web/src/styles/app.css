@@ -272,7 +272,11 @@ h6 {
 }
 .datenav__label {
   min-width: 168px;
-  padding: 0.15rem 0.4rem;
+  padding: 0.15rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   text-align: center;
   font-weight: 600;
   font-size: 0.9375rem;
@@ -284,6 +288,10 @@ h6 {
 }
 .datenav__label:hover {
   background-color: var(--surface-2);
+}
+.datenav__date {
+  display: block;
+  min-width: 0;
 }
 .datenav__label small {
   display: block;
@@ -792,7 +800,8 @@ h6 {
   width: 100%;
   text-align: left;
   padding: 0.65rem 0.75rem;
-  border-radius: var(--r-sm);
+  /* Список плоский: подсветка при наведении без скруглений. */
+  border-radius: 0;
   background: none;
   border: 0;
   transition: background-color var(--t-fast) var(--ease);
@@ -802,7 +811,6 @@ h6 {
 }
 .product + .product {
   border-top: 1px solid var(--line);
-  border-radius: 0;
 }
 .product__body {
   flex: 1;
@@ -825,22 +833,16 @@ h6 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.product__edit {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--r-full);
-  display: inline-flex;
-  align-items: center;
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   justify-content: center;
-  color: var(--muted);
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  margin-top: 0.5rem;
 }
-.product__edit:hover {
-  background-color: var(--surface-3);
-  color: var(--text);
+.suggestions .chip {
+  cursor: pointer;
 }
-
 /* ---------- Значки ---------- */
 
 .badge {
@@ -850,10 +852,6 @@ h6 {
   --bs-badge-font-size: 0.625rem;
   --bs-badge-border-radius: 6px;
   letter-spacing: 0.02em;
-}
-.badge-ai {
-  background-color: rgba(74, 125, 255, 0.14);
-  color: var(--protein);
 }
 
 /* ---------- Сканер штрихкодов ---------- */
@@ -1184,6 +1182,88 @@ h6 {
   color: var(--accent-ink);
 }
 
+/* ---------- Календарь ---------- */
+
+.cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+.cal__title {
+  font-weight: 600;
+  font-size: 1rem;
+  text-align: center;
+}
+.cal__weekdays,
+.cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal__weekdays {
+  margin-bottom: 4px;
+}
+.cal__weekday {
+  text-align: center;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cal__day {
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background-color: transparent;
+  color: var(--text);
+  min-height: 52px;
+  padding: 0.3rem 0.1rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  transition: background-color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.cal__day:hover {
+  background-color: var(--surface-2);
+  border-color: var(--line-2);
+}
+.cal__daynum {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.cal__kcal {
+  font-size: 0.625rem;
+  line-height: 1.1;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.cal__day--under {
+  background-color: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+.cal__day--under .cal__kcal {
+  color: var(--accent-ink);
+}
+.cal__day--over {
+  background-color: color-mix(in srgb, var(--danger) 18%, var(--surface));
+}
+.cal__day--over .cal__kcal {
+  color: var(--danger);
+}
+.cal__day.is-out {
+  opacity: 0.4;
+}
+.cal__day.is-future {
+  color: var(--muted);
+}
+.cal__day.is-selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 /* ---------- Подсказки и уведомления ---------- */
 
 .alert {
@@ -1358,6 +1438,13 @@ h6 {
   }
   .datenav__label small {
     display: none;
+  }
+  .cal__day {
+    min-height: 46px;
+    padding: 0.25rem 0.05rem 0.2rem;
+  }
+  .cal__kcal {
+    font-size: 0.5625rem;
   }
   .icon-btn {
     width: 36px;

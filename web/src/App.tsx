@@ -13,14 +13,28 @@ import { ProductEditor } from './components/ProductEditor';
 import { SettingsSheet } from './components/SettingsSheet';
 import { Sheet } from './components/Sheet';
 import { AuthScreen } from './components/AuthScreen';
+import { MonthCalendar } from './components/MonthCalendar';
 import { ToastHost, type ToastItem } from './components/Toast';
 import { IconRefresh } from './components/Icons';
 
 type SheetState =
   | { kind: 'picker'; meal: MealId }
   | { kind: 'grams'; product: Product; entryId: number | null; grams: number; meal: MealId }
-  | { kind: 'editor'; product: Product | null; prefill: { name?: string; barcode?: string } }
-  | { kind: 'settings' };
+  | { kind: 'editor'; product: Product | null; prefill: ProductPrefill }
+  | { kind: 'settings' }
+  | { kind: 'calendar' };
+
+/** Данные, с которыми открывается редактор нового продукта. */
+type ProductPrefill = {
+  name?: string;
+  brand?: string;
+  barcode?: string;
+  kcal?: number;
+  protein?: number;
+  fat?: number;
+  carbs?: number;
+  servingG?: number;
+};
 
 const MEAL_NAMES: Record<MealId, string> = {
   breakfast: 'Завтрак',
@@ -45,6 +59,8 @@ export default function App() {
   const [closing, setClosing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [productVersion, setProductVersion] = useState(0);
+  /** Идёт ли запрос КБЖУ у внешнего каталога. */
+  const [hydrating, setHydrating] = useState(false);
   const toastId = useRef(0);
   const closeTimer = useRef<number | undefined>(undefined);
 
@@ -234,7 +250,11 @@ export default function App() {
   const productFromEntry = (entry: Entry): Product => ({
     id: entry.productId ?? 0,
     source: 'own',
+    // Владельца по записи не узнать — он нужен только в редакторе,
+    // а там продукт заново запрашивается с сервера.
+    owner: 'user',
     name: entry.name,
+    brand: '',
     kcal: entry.per100.kcal,
     protein: entry.per100.protein,
     fat: entry.per100.fat,
@@ -244,15 +264,56 @@ export default function App() {
     useCount: 0,
   });
 
+  /** Продукт каталога не правим — открываем редактор своей версии. */
+  const editProduct = (product: Product | null) => {
+    if (!product) {
+      push({ kind: 'editor', product: null, prefill: {} });
+      return;
+    }
+    if (product.owner === 'user') {
+      push({ kind: 'editor', product, prefill: {} });
+      return;
+    }
+    push({
+      kind: 'editor',
+      product: null,
+      prefill: {
+        name: product.name,
+        brand: product.brand,
+        barcode: product.barcode,
+        kcal: product.kcal,
+        protein: product.protein,
+        fat: product.fat,
+        carbs: product.carbs,
+        servingG: product.servingG,
+      },
+    });
+  };
+
   // ---------- Рендер шагов ----------
 
   const top = stack[stack.length - 1];
 
-  const editorTitle = (product: Product | null) =>
-    !product ? 'Новый продукт' : product.source === 'off' ? 'Своя версия' : 'Редактирование';
+  const editorTitle = (product: Product | null, prefill: ProductPrefill) =>
+    product ? 'Редактирование' : prefill.kcal !== undefined ? 'Своя версия' : 'Новый продукт';
 
   const renderSheet = () => {
     if (!top) return null;
+
+    if (top.kind === 'calendar') {
+      return (
+        <Sheet title="Календарь" onClose={closeAll}>
+          <MonthCalendar
+            selected={date}
+            target={targets.kcal}
+            onPick={(iso) => {
+              setDate(iso);
+              closeAll();
+            }}
+          />
+        </Sheet>
+      );
+    }
 
     if (top.kind === 'picker') {
       return (
@@ -261,16 +322,36 @@ export default function App() {
             meal={top.meal}
             mealName={MEAL_NAMES[top.meal]}
             refreshToken={productVersion}
-            onPick={(p) =>
+            hydrating={hydrating}
+            onPick={async (p) => {
+              // Продукт из внешнего каталога приходит без КБЖУ — забираем их
+              // из API и сразу кладём продукт в нашу базу.
+              if (p.pending && p.extSlug) {
+                setHydrating(true);
+                try {
+                  const res = await api.hydrateProduct(p.extSlug);
+                  push({
+                    kind: 'grams',
+                    product: res.product,
+                    entryId: null,
+                    grams: res.product.servingG || 100,
+                    meal: top.meal,
+                  });
+                } catch {
+                  pushToast('Не удалось получить КБЖУ продукта');
+                } finally {
+                  setHydrating(false);
+                }
+                return;
+              }
               push({
                 kind: 'grams',
                 product: p,
                 entryId: null,
                 grams: p.servingG || 100,
                 meal: top.meal,
-              })
-            }
-            onEdit={(p) => push({ kind: 'editor', product: p, prefill: {} })}
+              });
+            }}
             onCreate={(prefill) => push({ kind: 'editor', product: null, prefill })}
           />
         </Sheet>
@@ -301,10 +382,10 @@ export default function App() {
               if (id > 0) {
                 void api
                   .getProduct(id)
-                  .then((p) => push({ kind: 'editor', product: p, prefill: {} }))
+                  .then((p) => editProduct(p))
                   .catch(() => push({ kind: 'editor', product: top.product, prefill: {} }));
               } else {
-                push({ kind: 'editor', product: top.product, prefill: {} });
+                editProduct(top.product);
               }
             }}
           />
@@ -316,7 +397,7 @@ export default function App() {
       const below = stack[stack.length - 2];
       const originMeal: MealId = below && below.kind === 'picker' ? below.meal : 'snack';
       return (
-        <Sheet title={editorTitle(top.product)} onClose={closeAll} onBack={pop}>
+        <Sheet title={editorTitle(top.product, top.prefill)} onClose={closeAll} onBack={pop}>
           <ProductEditor
             product={top.product}
             prefill={top.prefill}
@@ -394,7 +475,7 @@ export default function App() {
         theme={theme}
         onPrev={() => setDate((d) => shiftDate(d, -1))}
         onNext={() => setDate((d) => shiftDate(d, 1))}
-        onToday={() => setDate(today())}
+        onOpenCalendar={() => push({ kind: 'calendar' })}
         onTheme={toggleTheme}
         onSettings={() => push({ kind: 'settings' })}
       />

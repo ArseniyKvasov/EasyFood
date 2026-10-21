@@ -133,6 +133,50 @@ const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS product_portions_user_idx ON product_portions (user_id, product_id);
     `,
   },
+  {
+    id: '005_catalog',
+    sql: `
+      -- Поиск по названию с опечатками: триграммы.
+      CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS brand TEXT NOT NULL DEFAULT '';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS ext_id TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS ext_slug TEXT;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS norm_name TEXT NOT NULL DEFAULT '';
+
+      -- Старые продукты из Open Food Facts хранились как «Бренд — Название».
+      -- Разносим по отдельным колонкам, чтобы бренд подставлялся в скобках.
+      UPDATE products
+         SET brand = split_part(name, ' — ', 1),
+             name  = split_part(name, ' — ', 2)
+       WHERE brand = '' AND position(' — ' in name) > 0;
+
+      -- Нормализованное имя для поиска: нижний регистр, «ё» → «е», без знаков.
+      UPDATE products
+         SET norm_name = lower(replace(trim(regexp_replace(name, '[^a-zA-Zа-яА-ЯёЁ0-9]+', ' ', 'g')), 'ё', 'е'))
+       WHERE norm_name = '';
+
+      CREATE INDEX IF NOT EXISTS products_norm_name_trgm ON products USING gin (norm_name gin_trgm_ops);
+      CREATE UNIQUE INDEX IF NOT EXISTS products_ext_id_uniq ON products (ext_id) WHERE ext_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS products_barcode_idx ON products (barcode) WHERE barcode <> '';
+
+      -- Счётчики обращений к внешним API: лимиты «за месяц» считаем сами.
+      CREATE TABLE IF NOT EXISTS api_usage (
+        provider TEXT NOT NULL,
+        month    TEXT NOT NULL,
+        used     INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (provider, month)
+      );
+
+      -- Очередь предзагрузки каталога: что и в каком порядке качать в БД.
+      CREATE TABLE IF NOT EXISTS catalog_backfill (
+        query  TEXT PRIMARY KEY,
+        cursor INTEGER NOT NULL DEFAULT 0,
+        done   BOOLEAN NOT NULL DEFAULT FALSE,
+        ord    INTEGER NOT NULL DEFAULT 0
+      );
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

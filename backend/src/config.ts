@@ -36,6 +36,18 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   openFoodFacts: bool(process.env.OPEN_FOOD_FACTS_ENABLED, true),
+  nutriapix: {
+    apiKey: process.env.NUTRIAPIX_API_KEY ?? '',
+    baseUrl: (process.env.NUTRIAPIX_BASE_URL ?? 'https://nutriapix.ru/api/v1').replace(/\/+$/, ''),
+    /** Сколько запросов в месяц можно сделать к /food (лимит тестового токена). */
+    monthlyBudget: num(process.env.NUTRIAPIX_MONTHLY_BUDGET, 1000),
+    /** Сколько из этих запросов разрешено тратить на предзагрузку каталога. */
+    backfillBudget: num(process.env.NUTRIAPIX_BACKFILL_BUDGET, 700),
+    /** Сколько продуктов докачивать за один проход предзагрузки. */
+    backfillBatch: num(process.env.NUTRIAPIX_BACKFILL_BATCH, 2),
+    /** Как часто запускать предзагрузку, часов. */
+    backfillIntervalHours: num(process.env.NUTRIAPIX_BACKFILL_INTERVAL_HOURS, 2),
+  },
   ai: {
     apiKey: process.env.OPENAI_API_KEY ?? '',
     baseUrl: (process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/+$/, ''),
@@ -47,6 +59,42 @@ export const config = {
     reasoningEffort: reasoningEffort(process.env.OPENAI_REASONING_EFFORT),
     responseFormat: (process.env.OPENAI_RESPONSE_FORMAT ?? 'json_object').trim(),
   },
+  s3: {
+    bucket: process.env.S3_BUCKET ?? '',
+    /** Префикс внутри бакета для картинок пользователей. */
+    location: (process.env.S3_LOCATION ?? 'uploads').replace(/^\/+|\/+$/g, ''),
+    /** Префикс внутри бакета для дампов базы. */
+    backupLocation: (process.env.S3_BACKUP_LOCATION ?? 'backups').replace(/^\/+|\/+$/g, ''),
+    /** Пусто — стандартный AWS S3; для Yandex Cloud: https://storage.yandexcloud.net */
+    endpointUrl: process.env.S3_ENDPOINT_URL ?? '',
+    region: process.env.S3_REGION_NAME ?? 'ru-central1',
+    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
+    /** MinIO и другие совместимые хранилища требуют адрес вида bucket/host. */
+    forcePathStyle: bool(process.env.S3_FORCE_PATH_STYLE, false),
+    /** Сколько живёт подписанная ссылка на скачивание, секунд. */
+    signedUrlExpire: num(process.env.S3_QUERYSTRING_EXPIRE, 900),
+    /** Сколько дней хранить бэкапы базы в S3. */
+    backupKeepDays: num(process.env.S3_BACKUP_KEEP_DAYS, 14),
+    /** Сколько часов может жить загруженная картинка: дальше её удаляет чистка. */
+    uploadKeepHours: num(process.env.S3_UPLOAD_KEEP_HOURS, 24),
+  },
+  maintenance: {
+    /** Сколько дней хранить историю дневника. */
+    historyRetentionDays: num(process.env.HISTORY_RETENTION_DAYS, 60),
+    /** Как часто делать бэкап базы в S3, часов. */
+    backupIntervalHours: num(process.env.BACKUP_INTERVAL_HOURS, 24),
+    /** Как часто чистить историю, часов. */
+    retentionIntervalHours: num(process.env.RETENTION_INTERVAL_HOURS, 6),
+    /** Как часто удалять старые картинки из S3, часов. */
+    uploadCleanupIntervalHours: num(process.env.UPLOAD_CLEANUP_INTERVAL_HOURS, 1),
+  },
 };
 
 export const aiEnabled = () => config.ai.apiKey.length > 0;
+
+/** S3 настроен — можно грузить картинки напрямую в хранилище. */
+export const s3Enabled = () =>
+  config.s3.bucket.length > 0 &&
+  config.s3.accessKeyId.length > 0 &&
+  config.s3.secretAccessKey.length > 0;

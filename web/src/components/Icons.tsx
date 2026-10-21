@@ -58,6 +58,13 @@ export const IconPencil = ({ size = 16, ...p }: IconProps) => (
   </svg>
 );
 
+export const IconCopy = ({ size = 16, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <rect x="9" y="9" width="12" height="12" rx="2.5" />
+    <path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5" />
+  </svg>
+);
+
 export const IconCamera = ({ size = 18, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
     <path d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4Z" />

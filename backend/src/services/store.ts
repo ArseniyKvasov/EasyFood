@@ -1,4 +1,5 @@
 import { one, query } from '../db.js';
+import { displayName, normalizeName } from '../lib/text.js';
 import type { Nutrition, Product, Settings } from '../types.js';
 
 export type ProductRow = {
@@ -13,13 +14,21 @@ export type ProductRow = {
   barcode: string;
   use_count: string;
   user_id: string | null;
+  brand: string | null;
+  ext_id: string | null;
+  ext_slug: string | null;
+  norm_name: string | null;
 };
 
 export function mapProduct(r: ProductRow): Product {
   return {
     id: Number(r.id),
     source: (r.source as Product['source']) ?? 'own',
-    name: r.name,
+    // Продукт каталога принадлежит платформе, личный — пользователю.
+    owner: r.user_id === null ? 'platform' : 'user',
+    // Бренд показываем в скобках, если его нет в самом названии.
+    name: displayName(r.name, r.brand ?? ''),
+    brand: r.brand ?? '',
     kcal: Number(r.kcal),
     protein: Number(r.protein),
     fat: Number(r.fat),
@@ -27,10 +36,12 @@ export function mapProduct(r: ProductRow): Product {
     servingG: Number(r.serving_g),
     barcode: r.barcode ?? '',
     useCount: Number(r.use_count),
+    extId: r.ext_id ?? undefined,
+    extSlug: r.ext_slug ?? undefined,
   };
 }
 
-export const PRODUCT_COLUMNS = `id, source, name, kcal, protein, fat, carbs, serving_g, barcode, use_count, user_id`;
+export const PRODUCT_COLUMNS = `id, source, name, kcal, protein, fat, carbs, serving_g, barcode, use_count, user_id, brand, ext_id, ext_slug, norm_name`;
 
 export async function getSettings(userId: number): Promise<Settings> {
   await query(`INSERT INTO settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [userId]);
@@ -59,6 +70,7 @@ export async function getSettings(userId: number): Promise<Settings> {
 /** Кэширует продукт из Open Food Facts в общий каталог, чтобы не ходить в сеть повторно. */
 export async function findOrCacheOffProduct(p: {
   name: string;
+  brand?: string;
   kcal: number;
   protein: number;
   fat: number;
@@ -72,11 +84,12 @@ export async function findOrCacheOffProduct(p: {
   );
   if (existing) return mapProduct(existing);
 
+  const brand = p.brand ?? '';
   const rows = await query<ProductRow>(
-    `INSERT INTO products (source, name, kcal, protein, fat, carbs, serving_g, barcode, user_id)
-     VALUES ('off', $1, $2, $3, $4, $5, $6, $7, NULL)
+    `INSERT INTO products (source, name, brand, kcal, protein, fat, carbs, serving_g, barcode, norm_name, user_id)
+     VALUES ('off', $1, $2, $3, $4, $5, $6, $7, $8, $9, NULL)
      RETURNING ${PRODUCT_COLUMNS}`,
-    [p.name, p.kcal, p.protein, p.fat, p.carbs, p.servingG, p.barcode],
+    [p.name, brand, p.kcal, p.protein, p.fat, p.carbs, p.servingG, p.barcode, normalizeName(p.name)],
   );
   return mapProduct(rows[0]);
 }

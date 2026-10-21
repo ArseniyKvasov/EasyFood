@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
-import { fileToDataUrl } from '../lib/image';
+import { fileToDataUrl, fileToImageBlob } from '../lib/image';
 import { num } from '../lib/format';
 import type { MealId, Product, Recognition } from '../types';
 import {
@@ -8,7 +8,6 @@ import {
   IconCamera,
   IconCheck,
   IconImage,
-  IconPencil,
   IconPlus,
   IconSearch,
   IconSparkles,
@@ -28,8 +27,9 @@ type Props = {
   meal: MealId;
   mealName: string;
   refreshToken: number;
+  /** Идёт ли запрос КБЖУ у внешнего каталога. */
+  hydrating?: boolean;
   onPick: (product: Product) => void;
-  onEdit: (product: Product) => void;
   onCreate: (prefill: { name?: string; barcode?: string }) => void;
 };
 
@@ -87,14 +87,15 @@ export function ProductPicker({
   meal,
   mealName,
   refreshToken,
+  hydrating = false,
   onPick,
-  onEdit,
   onCreate,
 }: Props) {
   const [tab, setTab] = useState<Tab>('search');
   const [query, setQuery] = useState('');
-  const [local, setLocal] = useState<Product[]>([]);
+  const [results, setResults] = useState<Product[]>([]);
   const [remote, setRemote] = useState<Product[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [code, setCode] = useState('');
@@ -107,6 +108,8 @@ export function ProductPicker({
     image: null as string | null,
     note: '',
     result: null as Recognition | null,
+    /** Ключ загруженной картинки в S3 — её надо удалить, когда она больше не нужна. */
+    key: null as string | null,
   });
   const [textState, setTextState] = useState({
     note: '',
@@ -117,7 +120,27 @@ export function ProductPicker({
   const [aiEnabled, setAiEnabled] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  /** Исходный файл — из него качаем blob для загрузки в S3. */
+  const photoFile = useRef<File | null>(null);
+  /** Ключ загруженной картинки — чтобы убрать её из бакета, когда она не нужна. */
+  const uploadKey = useRef<string | null>(null);
   const requestId = useRef(0);
+
+  /** Убирает картинку из бакета: после использования она больше не нужна. */
+  const dropUpload = (key: string | null) => {
+    if (!key) return;
+    void api.deleteUpload(key).catch(() => undefined);
+  };
+
+  // Пользователь закрыл шторку, не сохранив продукт: картинка всё равно
+  // не нужна — удаляем. Если он не дошёл до конца, заберёт чистка по суткам.
+  useEffect(
+    () => () => {
+      dropUpload(uploadKey.current);
+      uploadKey.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     api
@@ -126,40 +149,67 @@ export function ProductPicker({
       .catch(() => setAiEnabled(false));
   }, []);
 
-  // Поиск: локальная база + Open Food Facts как дополнение.
+  // Поиск: своя база (с опечатками) + Nutriapix + Open Food Facts.
+  // Если ничего не нашлось — подсказываем похожие названия.
   useEffect(() => {
     const q = query.trim();
     const id = ++requestId.current;
+    if (q.length < 2) {
+      // Пустой запрос — показываем то, что пользователь добавляет чаще всего.
+      setSuggestions([]);
+      api
+        .getProducts('')
+        .then((res) => {
+          if (id === requestId.current) setResults(res.products);
+        })
+        .catch(() => {
+          if (id === requestId.current) setResults([]);
+        });
+      return;
+    }
     const timer = window.setTimeout(async () => {
       setLoading(true);
       try {
-        const own = await api.getProducts(q);
+        const res = await api.searchProducts(q);
         if (id !== requestId.current) return;
-        setLocal(own.products);
-        if (q.length >= 2) {
+        setResults(res.products);
+        setRemote([]);
+        // Свои продукты и Nutriapix уже показаны — ждать Open Food Facts не нужно.
+        setLoading(false);
+        if (res.products.length === 0) {
           try {
-            const res = await api.getRemoteProducts(q);
-            if (id !== requestId.current) return;
-            setRemote(res.products);
+            const hints = await api.productHints(q);
+            if (id === requestId.current) setSuggestions(hints.hints);
+          } catch {
+            if (id === requestId.current) setSuggestions([]);
+          }
+        } else {
+          setSuggestions([]);
+        }
+        // Open Food Facts отвечает медленно — догружаем отдельно,
+        // чтобы результаты из своей базы и Nutriapix были видны сразу.
+        if (res.more) {
+          try {
+            const off = await api.getRemoteProducts(q);
+            if (id === requestId.current) setRemote(off.products);
           } catch {
             if (id === requestId.current) setRemote([]);
           }
-        } else {
-          setRemote([]);
         }
       } catch {
-        if (id === requestId.current) setLocal([]);
+        if (id === requestId.current) setResults([]);
       } finally {
         if (id === requestId.current) setLoading(false);
       }
-    }, 260);
+    }, 280);
     return () => window.clearTimeout(timer);
   }, [query, refreshToken]);
 
-  const results = useMemo(() => {
-    const seen = new Set(local.map((p) => p.id));
-    return [...local, ...remote.filter((p) => !seen.has(p.id))];
-  }, [local, remote]);
+  /** Свои продукты и Nutriapix + позже догруженный Open Food Facts. */
+  const allResults = useMemo(() => {
+    const seen = new Set(results.map((p) => p.name.toLowerCase()));
+    return [...results, ...remote.filter((p) => !seen.has(p.name.toLowerCase()))];
+  }, [results, remote]);
 
   const lookupCode = useCallback(
     async (raw: string) => {
@@ -186,9 +236,39 @@ export function ProductPicker({
     setAiError(null);
     try {
       const image = await fileToDataUrl(file);
-      setPhotoState((s) => ({ ...s, image, result: null }));
+      photoFile.current = file;
+      // Предыдущее фото больше не понадобится — убираем его из бакета.
+      dropUpload(uploadKey.current);
+      uploadKey.current = null;
+      setPhotoState((s) => ({ ...s, image, result: null, key: null }));
     } catch {
       setAiError('Не удалось прочитать файл.');
+    }
+  };
+
+  /**
+   * Кладёт фото прямо в S3: сервер приложения байты картинки не видит.
+   * Если хранилище не настроено — возвращаем null, и фото уходит
+   * запасным путём через сервер.
+   */
+  const uploadToS3 = async (file: File): Promise<string | null> => {
+    const blob = await fileToImageBlob(file);
+    try {
+      const { key, uploadUrl, contentType } = await api.presignUpload({
+        contentType: 'image/jpeg',
+        size: blob.size,
+      });
+      const res = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: blob,
+        headers: { 'Content-Type': contentType },
+      });
+      if (!res.ok) throw new Error(`UPLOAD_FAILED_${res.status}`);
+      return key;
+    } catch (err) {
+      // S3 не настроен — откатываемся на отправку через сервер.
+      if (err instanceof ApiError && err.status === 501) return null;
+      throw err;
     }
   };
 
@@ -198,8 +278,22 @@ export function ProductPicker({
     setRecognizing(true);
     setAiError(null);
     try {
-      const result = await api.recognize(image, note.trim() || undefined);
-      setPhotoState((s) => ({ ...s, result }));
+      const file = photoFile.current;
+      const key = file ? await uploadToS3(file) : null;
+      if (key) {
+        try {
+          const result = await api.recognize({ key, note: note.trim() || undefined });
+          uploadKey.current = key;
+          setPhotoState((s) => ({ ...s, result, key }));
+        } catch (err) {
+          // Фото уже в бакете, но распознать не вышло — убираем мусор.
+          dropUpload(key);
+          throw err;
+        }
+      } else {
+        const result = await api.recognize({ image, note: note.trim() || undefined });
+        setPhotoState((s) => ({ ...s, result }));
+      }
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
@@ -236,6 +330,12 @@ export function ProductPicker({
       servingG: recognition.grams,
       source: 'ai',
     });
+    // Продукт создан — картинка больше не нужна, убираем её из бакета.
+    if (tab === 'photo') {
+      dropUpload(uploadKey.current);
+      uploadKey.current = null;
+      setPhotoState((s) => ({ ...s, key: null }));
+    }
     onPick({ ...product, servingG: recognition.grams });
   };
 
@@ -456,46 +556,49 @@ export function ProductPicker({
         <div className="list-head">
           {query.trim() ? 'Результаты' : 'Часто используете'}
           {loading && ' · обновляем…'}
+          {hydrating && ' · уточняем КБЖУ…'}
         </div>
 
-        {results.length === 0 && !loading ? (
+        {allResults.length === 0 && !loading ? (
           <div className="empty">
             {query.trim() ? 'Ничего не найдено' : 'Пока нет продуктов'}
             <br />
-            <span className="hint">Создайте свой продукт — он сохранится навсегда</span>
+            {suggestions.length > 0 ? (
+              <>
+                <span className="hint">Возможно, вы искали:</span>
+                <span className="suggestions">
+                  {suggestions.map((h) => (
+                    <button key={h} className="chip" onClick={() => setQuery(h)}>
+                      {h}
+                    </button>
+                  ))}
+                </span>
+              </>
+            ) : (
+              <span className="hint">Создайте свой продукт — он сохранится навсегда</span>
+            )}
           </div>
         ) : (
           <div>
-            {results.map((p) => (
-              <button key={p.id} className="product" onClick={() => onPick(p)}>
+            {allResults.map((p) => (
+              <button
+                key={`${p.source}-${p.id || p.extSlug}`}
+                className="product"
+                disabled={hydrating}
+                onClick={() => onPick(p)}
+              >
                 <span className="product__body">
-                  <span className="product__name">
-                    {p.name}
-                    {p.source === 'ai' && <span className="badge badge-ai">ИИ</span>}
-                  </span>
+                  <span className="product__name">{p.name}</span>
                   <span className="product__meta">
-                    {num(p.kcal)} ккал · Б {num(p.protein, 1)} · Ж {num(p.fat, 1)} · У {num(p.carbs, 1)} на
-                    100 г
+                    {p.pending ? (
+                      'КБЖУ уточняются…'
+                    ) : (
+                      <>
+                        {num(p.kcal)} ккал · Б {num(p.protein, 1)} · Ж {num(p.fat, 1)} · У{' '}
+                        {num(p.carbs, 1)} на 100 г
+                      </>
+                    )}
                   </span>
-                </span>
-                <span
-                  className="product__edit"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Редактировать продукт"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit(p);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      onEdit(p);
-                    }
-                  }}
-                >
-                  <IconPencil />
                 </span>
               </button>
             ))}

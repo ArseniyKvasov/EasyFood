@@ -24,8 +24,12 @@ export type Nutrition = {
 
 export type Product = {
   id: number;
-  source: 'own' | 'off' | 'ai';
+  source: 'own' | 'off' | 'ai' | 'np';
+  /** Владелец продукта: каталог платформы или личный продукт пользователя. */
+  owner: 'platform' | 'user';
   name: string;
+  /** Бренд производителя. */
+  brand: string;
   kcal: number;
   protein: number;
   fat: number;
@@ -33,6 +37,11 @@ export type Product = {
   servingG: number;
   barcode: string;
   useCount: number;
+  /** Идентификатор продукта во внешнем каталоге. */
+  extId?: string;
+  extSlug?: string;
+  /** Продукт найден, но КБЖУ ещё не подтянуты — нужно забрать из API. */
+  pending?: boolean;
 };
 
 export type Entry = {

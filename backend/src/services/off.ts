@@ -117,6 +117,9 @@ export function toProduct(p: OffProduct, id: number): Product {
   return {
     id,
     source: 'off',
+    // Продукты Open Food Facts попадают в общий каталог платформы.
+    owner: 'platform',
+    brand: p.brand ?? '',
     name: p.brand ? `${p.brand} — ${p.name}` : p.name,
     kcal: p.nutrition.kcal,
     protein: p.nutrition.protein,

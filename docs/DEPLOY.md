@@ -108,6 +108,119 @@ OPENAI_TEMPERATURE=            # пусто: Haiku 5.5 принимает тол
 OPENAI_RESPONSE_FORMAT=json_schema
 ```
 
+### Nutriapix: каталог продуктов
+
+Основной источник данных о продуктах. Ключ выдаётся на
+<https://nutriapix.ru>, в `.env`:
+
+```bash
+NUTRIAPIX_API_KEY=...
+NUTRIAPIX_BASE_URL=https://nutriapix.ru/api/v1
+NUTRIAPIX_MONTHLY_BUDGET=1000        # лимит запросов /food в месяц
+NUTRIAPIX_BACKFILL_BUDGET=700         # сколько из них отдаём предзагрузке
+NUTRIAPIX_BACKFILL_BATCH=2            # продуктов за один проход
+NUTRIAPIX_BACKFILL_INTERVAL_HOURS=2   # как часто запускать предзагрузку
+```
+
+Пока ключа нет, поиск работает на своей базе и Open Food Facts.
+
+**Лимиты.** У тестового токена `/food` — 1000 запросов в месяц, остальные
+методы без месячного ограничения. Приложение считает расход сам, в таблице
+`api_usage`:
+
+| Счётчик | Кто тратит | Лимит |
+|---------|-----------|-------|
+| `nutriapix.food` | пользователи: доскачиваем КБЖУ выбранного продукта | `MONTHLY_BUDGET - BACKFILL_BUDGET` |
+| `nutriapix.food.backfill` | предзагрузка каталога | `BACKFILL_BUDGET` |
+
+Поиск (`/food/search`) и подсказки (`/food/search/hints`) лимита не расходуют
+вообще. Частота запросов тоже ограничена: 5 запросов в секунду на обычные
+методы и 20 на подсказки.
+
+**Предзагрузка каталога.** Сервис `maintenance` раз в
+`NUTRIAPIX_BACKFILL_INTERVAL_HOURS` берёт следующий запрос из очереди
+`catalog_backfill`, находит в Nutriapix продукты по этому запросу и
+дозакачивает их КБЖУ в нашу базу. Очередь стартует с частых продуктов
+(гречка, рис, овсянка, курица, молоко и ещё 25) — по два продукта за проход.
+
+```bash
+docker compose logs -f maintenance | grep каталог
+```
+
+**Сколько каталог наполнен:**
+
+```bash
+docker compose exec -T db psql -U easyfood -d easyfood \
+  -c "SELECT count(*) FROM products WHERE user_id IS NULL AND source = 'np';" \
+  -c "SELECT provider, used FROM api_usage;"
+```
+
+### S3: фото пользователей и бэкапы базы
+
+Если `S3_BUCKET`, `S3_ACCESS_KEY_ID` и `S3_SECRET_ACCESS_KEY` заданы, приложение
+работает иначе:
+
+- фото из браузера уходит **прямо в бакет** по подписанной ссылке — сервер
+  приложения байты картинки не видит, а ИИ забирает её из бакета по своей
+  подписанной ссылке;
+- сервис `maintenance` складывает в бакет дампы базы (`pg_dump` в gzip) и
+  удаляет бэкапы старше `S3_BACKUP_KEEP_DAYS` дней.
+
+Без этих переменных всё работает как раньше: фото идёт через сервер,
+бэкапы не делаются.
+
+```bash
+S3_BUCKET=easyfood
+S3_ENDPOINT_URL=                 # пусто — AWS S3; Yandex Cloud: https://storage.yandexcloud.net
+S3_REGION_NAME=ru-central1
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_FORCE_PATH_STYLE=false        # MinIO — true
+S3_LOCATION=uploads              # папка с фото пользователей
+S3_BACKUP_LOCATION=backups       # папка с дампами базы
+S3_QUERYSTRING_EXPIRE=900        # срок жизни подписанной ссылки, секунд
+S3_BACKUP_KEEP_DAYS=14           # сколько дней хранить бэкапы
+S3_UPLOAD_KEEP_HOURS=24          # сколько часов может жить загруженная картинка
+```
+
+**CORS бакета** — без него браузер не сможет положить файл напрямую:
+
+```bash
+aws s3api put-bucket-cors --bucket easyfood --cors-configuration file://deploy/s3-cors.json
+```
+
+**Жизненный цикл** — фото нужны только на время распознавания, их стоит
+удалять:
+
+```bash
+aws s3api put-bucket-lifecycle-configuration \
+  --bucket easyfood --lifecycle-configuration file://deploy/s3-lifecycle.json
+```
+
+### Сколько живут фото в бакете
+
+Картинка удаляется тремя способами — вместе они дают гарантию, что снимок
+не пролежит в бакете дольше суток:
+
+1. **Сразу после создания продукта** — приложение удаляет объект, как только
+   из фото сделан продукт.
+2. **При закрытии шторки** — если пользователь бросил распознавание, фото
+   удаляется при закрытии окна.
+3. **Чистка по расписанию** — сервис `maintenance` раз в
+   `UPLOAD_CLEANUP_INTERVAL_HOURS` удаляет всё, что старше
+   `S3_UPLOAD_KEEP_HOURS`. Порог считается с запасом на интервал чистки,
+   поэтому картинка не переживает сутки.
+
+Плюс правило жизненного цикла бакета (`deploy/s3-lifecycle.json`) — последний
+страховочный круг на стороне S3.
+
+**Проверка:**
+
+```bash
+docker compose exec app node -e "import('./backend/dist/config.js').then(m=>console.log(m.s3Enabled()))"
+# true
+```
+
 `OPENAI_REASONING_EFFORT` уходит в OpenRouter как `reasoning.effort`
 (`low`/`minimal`/`medium`/`high`/`xhigh`/`max`/`none`). Пустое значение —
 параметр не отправляется, и модель думает на своём дефолте (у Haiku 5.5 это
@@ -275,9 +388,36 @@ docker image prune -f
 
 Миграции применяются автоматически при старте контейнера (`backend/src/migrations.ts`).
 
+Сервис `maintenance` (бэкапы в S3 и чистка истории) обновляется тем же образом —
+он собран из того же образа.
+
 ---
 
 ## 10. Бэкапы
+
+### Автоматически в S3
+
+Сервис `maintenance` делает дамп базы и складывает его в бакет:
+
+```bash
+docker compose ps maintenance            # статус
+docker compose logs -f maintenance       # логи
+```
+
+Расписание — переменными в `.env`:
+
+```bash
+BACKUP_INTERVAL_HOURS=24                 # как часто делать дамп
+S3_BACKUP_KEEP_DAYS=14                   # сколько дней хранить
+```
+
+Разовый бэкап вручную:
+
+```bash
+docker compose exec maintenance node backend/dist/scripts/maintenance.js --once
+```
+
+### Ручной дамп без S3
 
 ```bash
 # Дамп базы
@@ -287,10 +427,42 @@ docker compose exec -T db pg_dump -U easyfood easyfood | gzip > backup-$(date +%
 gunzip -c backup-2026-10-21.sql.gz | docker compose exec -T db psql -U easyfood easyfood
 ```
 
-Автобэкап по cron (`crontab -e`):
+### Восстановление из S3
 
-```cron
-0 3 * * cd /opt/EasyFood && docker compose exec -T db pg_dump -U easyfood easyfood | gzip > /opt/backups/easyfood-$(date +\%F).sql.gz
+```bash
+# Скачать последний дамп
+aws s3 cp s3://easyfood/backups/easyfood-2026-10-21T03-00-00.000Z.sql.gz /tmp/backup.sql.gz
+
+# Залить в базу
+gunzip -c /tmp/backup.sql.gz | docker compose exec -T db psql -U easyfood easyfood
+```
+
+Дамп сделан с ключами `--clean --if-exists`, поэтому restore пересоздаёт
+таблицы. Перед восстановлением остановите приложение, чтобы оно не писало
+в базу, пока идёт заливка:
+
+```bash
+docker compose stop app
+```
+
+---
+
+## 10.1. Хранение истории
+
+Дневник хранится `HISTORY_RETENTION_DAYS` дней (по умолчанию 60). Записи
+старше этого срока удаляются сервисом `maintenance` — при старте приложения
+и каждые `RETENTION_INTERVAL_HOURS` часов.
+
+```bash
+HISTORY_RETENTION_DAYS=60
+RETENTION_INTERVAL_HOURS=6
+```
+
+Сколько записей осталось:
+
+```bash
+docker compose exec -T db psql -U easyfood easyfood \
+  -c "SELECT count(*), min(day), max(day) FROM entries;"
 ```
 
 ---

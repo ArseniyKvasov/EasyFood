@@ -11,13 +11,24 @@ const BarcodeScanner = lazy(() =>
 
 type Props = {
   product: Product | null;
-  prefill: { name?: string; barcode?: string };
+  prefill: {
+    name?: string;
+    brand?: string;
+    barcode?: string;
+    kcal?: number;
+    protein?: number;
+    fat?: number;
+    carbs?: number;
+    servingG?: number;
+  };
   onSaved: (product: Product) => void;
   onDeleted: () => void;
 };
 
 type Form = {
   name: string;
+  /** Бренд не редактируем, но сохраняем — по нему название дополняется скобками. */
+  brand: string;
   kcal: string;
   protein: string;
   fat: string;
@@ -26,13 +37,14 @@ type Form = {
   barcode: string;
 };
 
-const emptyForm = (prefill: { name?: string; barcode?: string }): Form => ({
+const emptyForm = (prefill: Props['prefill']): Form => ({
   name: prefill.name ?? '',
-  kcal: '',
-  protein: '',
-  fat: '',
-  carbs: '',
-  servingG: '100',
+  brand: prefill.brand ?? '',
+  kcal: prefill.kcal !== undefined ? String(prefill.kcal) : '',
+  protein: prefill.protein !== undefined ? String(prefill.protein) : '',
+  fat: prefill.fat !== undefined ? String(prefill.fat) : '',
+  carbs: prefill.carbs !== undefined ? String(prefill.carbs) : '',
+  servingG: prefill.servingG !== undefined ? String(prefill.servingG) : '100',
   barcode: prefill.barcode ?? '',
 });
 
@@ -41,6 +53,7 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
     product
       ? {
           name: product.name,
+          brand: product.brand ?? '',
           kcal: String(product.kcal),
           protein: String(product.protein),
           fat: String(product.fat),
@@ -100,6 +113,7 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
     try {
       const payload = {
         name: form.name.trim(),
+        brand: form.brand.trim(),
         kcal: Number(numbers.kcal),
         protein: Number(numbers.protein),
         fat: Number(numbers.fat),
@@ -279,7 +293,7 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
         )}
       </button>
 
-      {product && product.source === 'own' && (
+      {product && product.owner === 'user' && (
         <button className="btn btn-danger-soft w-100 mt-2" disabled={busy} onClick={() => void remove()}>
           <IconTrash size={16} />
           Удалить продукт

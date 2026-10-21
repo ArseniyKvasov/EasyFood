@@ -22,6 +22,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: easyfood-app:latest
     container_name: easyfood-app
     restart: unless-stopped
     depends_on:
@@ -40,6 +41,24 @@ services:
       OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
       OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-}
       OPENAI_RESPONSE_FORMAT: ${OPENAI_RESPONSE_FORMAT:-json_object}
+      NUTRIAPIX_API_KEY: ${NUTRIAPIX_API_KEY:-}
+      NUTRIAPIX_BASE_URL: ${NUTRIAPIX_BASE_URL:-https://nutriapix.ru/api/v1}
+      NUTRIAPIX_MONTHLY_BUDGET: ${NUTRIAPIX_MONTHLY_BUDGET:-1000}
+      NUTRIAPIX_BACKFILL_BUDGET: ${NUTRIAPIX_BACKFILL_BUDGET:-700}
+      NUTRIAPIX_BACKFILL_BATCH: ${NUTRIAPIX_BACKFILL_BATCH:-2}
+      NUTRIAPIX_BACKFILL_INTERVAL_HOURS: ${NUTRIAPIX_BACKFILL_INTERVAL_HOURS:-2}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_LOCATION: ${S3_LOCATION:-uploads}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_REGION_NAME: ${S3_REGION_NAME:-ru-central1}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      S3_QUERYSTRING_EXPIRE: ${S3_QUERYSTRING_EXPIRE:-900}
+      S3_BACKUP_LOCATION: ${S3_BACKUP_LOCATION:-backups}
+      S3_BACKUP_KEEP_DAYS: ${S3_BACKUP_KEEP_DAYS:-14}
+      S3_UPLOAD_KEEP_HOURS: ${S3_UPLOAD_KEEP_HOURS:-24}
+      HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-60}
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:3000"
     healthcheck:
@@ -48,6 +67,46 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # Обслуживание: бэкап базы в S3 и чистка истории дневника.
+  # Тот же образ, что и у приложения: правится в одном месте.
+  maintenance:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: easyfood-app:latest
+    container_name: easyfood-maintenance
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["node", "backend/dist/scripts/maintenance.js"]
+    # Сервис не поднимает веб-сервер — healthcheck из образа ему не нужен.
+    healthcheck:
+      disable: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-easyfood}:${POSTGRES_PASSWORD:-easyfood}@db:5432/${POSTGRES_DB:-easyfood}
+      NUTRIAPIX_API_KEY: ${NUTRIAPIX_API_KEY:-}
+      NUTRIAPIX_BASE_URL: ${NUTRIAPIX_BASE_URL:-https://nutriapix.ru/api/v1}
+      NUTRIAPIX_MONTHLY_BUDGET: ${NUTRIAPIX_MONTHLY_BUDGET:-1000}
+      NUTRIAPIX_BACKFILL_BUDGET: ${NUTRIAPIX_BACKFILL_BUDGET:-700}
+      NUTRIAPIX_BACKFILL_BATCH: ${NUTRIAPIX_BACKFILL_BATCH:-2}
+      NUTRIAPIX_BACKFILL_INTERVAL_HOURS: ${NUTRIAPIX_BACKFILL_INTERVAL_HOURS:-2}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_LOCATION: ${S3_LOCATION:-uploads}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_REGION_NAME: ${S3_REGION_NAME:-ru-central1}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+      S3_BACKUP_LOCATION: ${S3_BACKUP_LOCATION:-backups}
+      S3_BACKUP_KEEP_DAYS: ${S3_BACKUP_KEEP_DAYS:-14}
+      S3_UPLOAD_KEEP_HOURS: ${S3_UPLOAD_KEEP_HOURS:-24}
+      HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-60}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      RETENTION_INTERVAL_HOURS: ${RETENTION_INTERVAL_HOURS:-6}
+      UPLOAD_CLEANUP_INTERVAL_HOURS: ${UPLOAD_CLEANUP_INTERVAL_HOURS:-1}
 
 volumes:
   easyfood-db:

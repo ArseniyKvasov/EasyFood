@@ -59,7 +59,7 @@ const RECOGNITION_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const buildBody = (imageDataUrl: string, note?: string): Record<string, unknown> => {
+const buildBody = (imageUrl: string, note?: string): Record<string, unknown> => {
   // Описание пользователя уточняет состав — отдаём его модели как подсказку.
   const prompt = note
     ? `${PROMPT}\n\nПользователь описал блюдо: «${note}». Учитывай это описание при определении названия, состава и веса порции.`
@@ -72,7 +72,7 @@ const buildBody = (imageDataUrl: string, note?: string): Record<string, unknown>
         role: 'user',
         content: [
           { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: imageDataUrl, detail: 'low' } },
+          { type: 'image_url', image_url: { url: imageUrl, detail: 'low' } },
         ],
       },
     ],
@@ -156,11 +156,18 @@ const parseRecognition = (payload: {
   };
 };
 
-export async function recognizeDish(imageDataUrl: string, note?: string): Promise<Recognition> {
+/**
+ * Распознавание блюда по фотографии.
+ * imageUrl — либо подписанная ссылка на картинку в S3, либо data: URL
+ * (запасной путь, когда хранилище не настроено).
+ */
+export async function recognizeDish(imageUrl: string, note?: string): Promise<Recognition> {
   if (!config.ai.apiKey) {
     throw Object.assign(new Error('AI_NOT_CONFIGURED'), { statusCode: 501 });
   }
-  if (!imageDataUrl.startsWith('data:image/')) {
+  const isDataUrl = imageUrl.startsWith('data:image/');
+  const isHttpUrl = /^https?:\/\//i.test(imageUrl);
+  if (!isDataUrl && !isHttpUrl) {
     throw Object.assign(new Error('INVALID_IMAGE'), { statusCode: 400 });
   }
 
@@ -173,7 +180,7 @@ export async function recognizeDish(imageDataUrl: string, note?: string): Promis
         'Content-Type': 'application/json',
         Authorization: `Bearer ${config.ai.apiKey}`,
       },
-      body: JSON.stringify(buildBody(imageDataUrl, note)),
+      body: JSON.stringify(buildBody(imageUrl, note)),
       signal: ctrl.signal,
     });
 

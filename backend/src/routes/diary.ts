@@ -5,8 +5,10 @@ import { MEALS, type Entry, type MealId, type Nutrition } from '../types.js';
 import { getSettings } from '../services/store.js';
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const MONTH_RE = /^\d{4}-\d{2}$/;
 
 const dateSchema = z.string().regex(DATE_RE, 'Некорректная дата (YYYY-MM-DD)');
+const monthSchema = z.string().regex(MONTH_RE, 'Некорректный месяц (YYYY-MM)');
 
 const entryRow = z.object({
   day: dateSchema,
@@ -89,6 +91,14 @@ async function rememberPortion(userId: number, productId: number | null, grams: 
   );
 }
 
+/** Границы месяца: [первое число, первое число следующего). */
+function monthRange(month: string): { from: string; to: string } {
+  const [y, m] = month.split('-').map(Number);
+  const next = new Date(Date.UTC(y, m, 1)); // m === 12 → январь следующего года
+  const to = `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}-01`;
+  return { from: `${month}-01`, to };
+}
+
 export async function diaryRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/diary', async (req) => {
     const parsed = dateSchema.safeParse((req.query as { date?: string }).date ?? '');
@@ -121,6 +131,31 @@ export async function diaryRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return { date, settings, totals, meals };
+  });
+
+  // Сводка за месяц для календаря: сколько ккал и сколько записей в каждом дне.
+  app.get('/api/diary/month', async (req) => {
+    const raw = (req.query as { month?: string }).month ?? '';
+    const parsed = monthSchema.safeParse(raw);
+    const month = parsed.success ? parsed.data : new Date().toISOString().slice(0, 7);
+    const { from, to } = monthRange(month);
+
+    const userId = req.user!.id;
+    const rows = await query<{ day: string; kcal: number; entries: number }>(
+      `SELECT day::text AS day,
+              ROUND(SUM(kcal100 * grams / 100))::float8 AS kcal,
+              COUNT(*)::int AS entries
+         FROM entries
+        WHERE user_id = $1 AND day >= $2::date AND day < $3::date
+        GROUP BY day
+        ORDER BY day`,
+      [userId, from, to],
+    );
+
+    return {
+      month,
+      days: rows.map((r) => ({ day: r.day, kcal: Number(r.kcal), entries: Number(r.entries) })),
+    };
   });
 
   app.post('/api/entries', async (req, reply) => {

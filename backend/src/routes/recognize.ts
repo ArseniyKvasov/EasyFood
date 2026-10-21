@@ -1,12 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { aiEnabled } from '../config.js';
+import { aiEnabled, s3Enabled } from '../config.js';
 import { recognizeByText, recognizeDish } from '../services/ai.js';
+import { isUserKey, presignDownload } from '../services/s3.js';
 
-const bodySchema = z.object({
-  image: z.string().min(100).max(8_000_000),
-  note: z.string().trim().max(500).optional(),
-});
+const bodySchema = z
+  .object({
+    /** Ключ картинки в S3 — основной путь, байты через сервер не идут. */
+    key: z.string().min(1).max(300).optional(),
+    /** Запасной путь: картинка прямо в теле запроса (когда S3 не настроен). */
+    image: z.string().min(100).max(8_000_000).optional(),
+    note: z.string().trim().max(500).optional(),
+  })
+  .refine((d) => d.key || d.image, { message: 'Нужна фотография' });
 
 export async function recognizeRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/recognize/status', async () => ({ enabled: aiEnabled() }));
@@ -51,8 +57,26 @@ export async function recognizeRoutes(app: FastifyInstance): Promise<void> {
     if (!body.success) {
       return reply.code(400).send({ error: 'VALIDATION', issues: body.error.issues });
     }
+
+    // Картинка лежит в S3: отдаём ИИ подписанную ссылку, а не байты.
+    let imageUrl: string;
+    if (body.data.key) {
+      if (!s3Enabled()) {
+        return reply.code(501).send({
+          error: 'S3_NOT_CONFIGURED',
+          message: 'Хранилище не настроено. Выберите фото заново.',
+        });
+      }
+      if (!isUserKey(req.user!.id, body.data.key)) {
+        return reply.code(403).send({ error: 'FORBIDDEN', message: 'Чужое фото' });
+      }
+      imageUrl = await presignDownload(body.data.key);
+    } else {
+      imageUrl = body.data.image!;
+    }
+
     try {
-      const result = await recognizeDish(body.data.image, body.data.note);
+      const result = await recognizeDish(imageUrl, body.data.note);
       return result;
     } catch (err) {
       const statusCode = (err as { statusCode?: number }).statusCode ?? 500;

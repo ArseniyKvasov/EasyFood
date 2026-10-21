@@ -1,4 +1,4 @@
-import type { Diary, Entry, Nutrition, Product, Recognition, Settings } from './types';
+import type { Diary, Entry, MonthSummary, Nutrition, Product, Recognition, Settings } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -51,6 +51,9 @@ export const api = {
 
   getDiary: (date: string) => request<Diary>(`/api/diary?date=${date}`),
 
+  getMonth: (month: string) =>
+    request<MonthSummary>(`/api/diary/month?month=${encodeURIComponent(month)}`),
+
   createEntry: (input: {
     day: string;
     meal: Entry['meal'];
@@ -71,6 +74,20 @@ export const api = {
 
   getProducts: (q = '') =>
     request<{ products: Product[] }>(`/api/products?q=${encodeURIComponent(q)}`),
+
+  /** Единый поиск: своя база + Nutriapix. `more` — есть смысл догрузить Open Food Facts. */
+  searchProducts: (q: string) =>
+    request<{ products: Product[]; more: boolean }>(
+      `/api/products/search?q=${encodeURIComponent(q)}`,
+    ),
+
+  /** Подсказки для поиска. */
+  productHints: (q: string) =>
+    request<{ hints: string[] }>(`/api/products/hints?q=${encodeURIComponent(q)}`),
+
+  /** Забирает КБЖУ из Nutriapix и сохраняет продукт в каталог. */
+  hydrateProduct: (slug: string) =>
+    request<{ product: Product }>(`/api/products/external/nutriapix/${encodeURIComponent(slug)}`),
 
   getProduct: (id: number) => request<Product>(`/api/products/${id}`),
 
@@ -114,8 +131,22 @@ export const api = {
 
   aiStatus: () => request<{ enabled: boolean }>('/api/recognize/status'),
 
-  recognize: (image: string, note?: string) =>
-    request<Recognition>('/api/recognize', json({ image, note })),
+  /** Настроено ли S3-хранилище: если да — картинки идут напрямую в бакет. */
+  uploadStatus: () => request<{ enabled: boolean }>('/api/uploads/status'),
+
+  /** Подписанная ссылка на загрузку: браузер кладёт файл прямо в S3. */
+  presignUpload: (input: { contentType: string; size: number }) =>
+    request<{ key: string; uploadUrl: string; contentType: string; expiresIn: number }>(
+      '/api/uploads/presign',
+      json(input),
+    ),
+
+  /** Удалить загруженный файл — например, если распознавание не удалось. */
+  deleteUpload: (key: string) =>
+    request<{ ok: true }>(`/api/uploads?key=${encodeURIComponent(key)}`, { method: 'DELETE' }),
+
+  recognize: (input: { key?: string; image?: string; note?: string }) =>
+    request<Recognition>('/api/recognize', json(input)),
 
   recognizeByText: (description: string) =>
     request<Recognition>('/api/recognize/text', json({ description })),

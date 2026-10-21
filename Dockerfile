@@ -31,7 +31,10 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-RUN apk add --no-cache tini && addgroup -S app && adduser -S app -G app
+# postgresql16-client — pg_dump для бэкапа базы в S3. Версия 16 совпадает
+# с сервером (postgres:16-alpine), поэтому дамп восстанавливается без
+# лишних предупреждений.
+RUN apk add --no-cache tini postgresql16-client && addgroup -S app && adduser -S app -G app
 
 COPY package.json package-lock.json* ./
 COPY backend/package.json backend/

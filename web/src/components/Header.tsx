@@ -6,12 +6,12 @@ type Props = {
   theme: 'auto' | 'light' | 'dark';
   onPrev: () => void;
   onNext: () => void;
-  onToday: () => void;
+  onOpenCalendar: () => void;
   onTheme: () => void;
   onSettings: () => void;
 };
 
-export function Header({ date, theme, onPrev, onNext, onToday, onTheme, onSettings }: Props) {
+export function Header({ date, theme, onPrev, onNext, onOpenCalendar, onTheme, onSettings }: Props) {
   return (
     <header className="topbar">
       <div className="container-xxl">
@@ -31,11 +31,13 @@ export function Header({ date, theme, onPrev, onNext, onToday, onTheme, onSettin
             </button>
             <button
               className="datenav__label"
-              onClick={onToday}
-              title="Вернуться к сегодняшнему дню"
+              onClick={onOpenCalendar}
+              title="Открыть календарь"
             >
-              {formatDayTitle(date)}
-              <small>{formatDaySubtitle(date)}</small>
+              <span className="datenav__date">
+                {formatDayTitle(date)}
+                <small>{formatDaySubtitle(date)}</small>
+              </span>
             </button>
             <button className="icon-btn" onClick={onNext} aria-label="Следующий день">
               <IconChevronRight size={18} />

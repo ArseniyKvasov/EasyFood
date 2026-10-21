@@ -12,6 +12,8 @@ import { diaryRoutes } from './routes/diary.js';
 import { productRoutes } from './routes/products.js';
 import { recognizeRoutes } from './routes/recognize.js';
 import { settingsRoutes } from './routes/settings.js';
+import { uploadRoutes } from './routes/uploads.js';
+import { runRetention, cleanupUploads } from './services/maintenance.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDist = resolve(here, '../../web/dist');
@@ -56,6 +58,7 @@ await app.register(diaryRoutes);
 await app.register(productRoutes);
 await app.register(settingsRoutes);
 await app.register(recognizeRoutes);
+await app.register(uploadRoutes);
 
 // ---------- Статика SPA ----------
 if (existsSync(staticRoot)) {
@@ -84,6 +87,20 @@ async function start(): Promise<void> {
   }
   await app.listen({ port: config.port, host: '0.0.0.0' });
   app.log.info(`EasyFood API on http://0.0.0.0:${config.port}`);
+
+  // История дневника живёт 60 дней, а картинки в S3 — не больше суток.
+  // Чистим при старте, дальше этим занимается сервис maintenance.
+  void runRetention()
+    .then((removed) => {
+      if (removed) app.log.info(`retention: removed ${removed} entries`);
+    })
+    .catch((err) => app.log.error(err, 'retention cleanup failed'));
+
+  void cleanupUploads()
+    .then((removed) => {
+      if (removed) app.log.info(`uploads: removed ${removed} stale images`);
+    })
+    .catch((err) => app.log.error(err, 'uploads cleanup failed'));
 }
 
 const shutdown = async (signal: string) => {
