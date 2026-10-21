@@ -19,7 +19,7 @@ const BarcodeScanner = lazy(() =>
   import('./BarcodeScanner').then((m) => ({ default: m.BarcodeScanner })),
 );
 
-type Tab = 'search' | 'barcode' | 'photo';
+type Tab = 'search' | 'barcode' | 'photo' | 'text';
 
 /** Ограничение на текстовое описание блюда. */
 const NOTE_MAX_LENGTH = 500;
@@ -134,16 +134,26 @@ export function ProductPicker({
     }
   };
 
-  const recognize = async () => {
-    const text = note.trim();
-    if (!photo && !text) return;
+  const recognizePhoto = async () => {
+    if (!photo) return;
     setRecognizing(true);
     setAiError(null);
     try {
-      const result = photo
-        ? await api.recognize(photo, text || undefined)
-        : await api.recognizeByText(text);
-      setRecognition(result);
+      setRecognition(await api.recognize(photo));
+    } catch (err) {
+      setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
+    } finally {
+      setRecognizing(false);
+    }
+  };
+
+  const recognizeText = async () => {
+    const text = note.trim();
+    if (!text) return;
+    setRecognizing(true);
+    setAiError(null);
+    try {
+      setRecognition(await api.recognizeByText(text));
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
@@ -201,33 +211,12 @@ export function ProductPicker({
     }
 
     if (tab === 'photo') {
-      const hasNote = note.trim().length > 0;
-      const canRecognize = hasNote || photo !== null;
-      const actionLabel =
-        photo && hasNote
-          ? 'Распознать блюдо'
-          : photo
-            ? 'Распознать по фото'
-            : 'Распознать по описанию';
-
       return (
         <>
-          {/* Съёмка камерой */}
+          {/* Без атрибута capture: система сама предлагает
+              «Сделать фото» или «Выбрать из медиатеки». */}
           <input
             ref={fileRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            hidden
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void pickPhoto(file);
-              e.target.value = '';
-            }}
-          />
-          {/* Выбор готового снимка из галереи */}
-          <input
-            ref={galleryRef}
             type="file"
             accept="image/*"
             hidden
@@ -239,54 +228,115 @@ export function ProductPicker({
           />
 
           {photo ? (
-            <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+            <>
+              <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
+
+              {recognition ? (
+                <div className="card mb-3">
+                  <div className="card-body">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <IconSparkles size={17} />
+                      <b>{recognition.name}</b>
+                      <span className="badge badge-ai">
+                        уверенность {Math.round(recognition.confidence * 100)}%
+                      </span>
+                    </div>
+                    <p className="hint mb-3">
+                      {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
+                      {num(recognition.nutrition.protein, 1)} · Ж {num(recognition.nutrition.fat, 1)} · У{' '}
+                      {num(recognition.nutrition.carbs, 1)}
+                    </p>
+                    <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
+                      <IconCheck />
+                      Добавить в «{mealName}»
+                    </button>
+                    <button
+                      className="btn btn-outline-secondary w-100 mt-2"
+                      onClick={() => setRecognition(null)}
+                    >
+                      Распознать заново
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="btn btn-primary w-100"
+                  onClick={() => void recognizePhoto()}
+                  disabled={recognizing || !aiEnabled}
+                >
+                  {recognizing ? (
+                    <>
+                      <span className="spinner" />
+                      Распознаём…
+                    </>
+                  ) : (
+                    <>
+                      <IconSparkles size={17} />
+                      Распознать блюдо
+                    </>
+                  )}
+                </button>
+              )}
+
+              <button
+                className="btn btn-outline-secondary w-100 mt-2"
+                onClick={() => fileRef.current?.click()}
+              >
+                <IconImage size={16} />
+                Другое фото
+              </button>
+            </>
           ) : (
-            <div className="photo-sources">
-              <button className="dropzone" onClick={() => fileRef.current?.click()}>
-                <span className="dropzone__icon">
-                  <IconCamera size={22} />
-                </span>
-                <b>Сфотографировать</b>
-                <span className="hint">Наведите камеру на блюдо</span>
-              </button>
-              <button className="dropzone" onClick={() => galleryRef.current?.click()}>
-                <span className="dropzone__icon">
-                  <IconImage size={22} />
-                </span>
-                <b>Выбрать из галереи</b>
-                <span className="hint">Готовое фото на устройстве</span>
-              </button>
-            </div>
+            <button className="dropzone" onClick={() => fileRef.current?.click()}>
+              <span className="dropzone__icon">
+                <IconCamera size={22} />
+              </span>
+              <b>Сфотографировать</b>
+              <span className="hint">Система предложит камеру или медиатеку</span>
+            </button>
           )}
 
-          {!recognition && (
-            <div className="photo-note">
-              <label className="form-label" htmlFor="photo-note">
-                Описание блюда {photo ? '(необязательно)' : ''}
-              </label>
-              <textarea
-                id="photo-note"
-                className="form-control"
-                rows={2}
-                maxLength={NOTE_MAX_LENGTH}
-                placeholder="Например: гречка с куриной грудкой и овощами, около 300 грамм"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-              />
-              <div
-                className={`photo-note__counter${
-                  note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
-                }`}
-              >
-                {note.length} / {NOTE_MAX_LENGTH}
-              </div>
-              <p className="hint mb-0">
-                {photo
-                  ? 'Описание поможет точнее определить состав — например, если на фото не видно всех ингредиентов.'
-                  : 'Опишите блюдо словами — ИИ оценит состав и вес порции. Можно и без фото.'}
-              </p>
-            </div>
+          {aiError && <div className="alert alert-danger mt-3 mb-0">{aiError}</div>}
+          {!aiEnabled && (
+            <p className="hint mt-3 mb-0">
+              Распознавание не настроено на сервере. Добавьте ключ <code>OPENAI_API_KEY</code> или
+              заполните продукт вручную.
+            </p>
           )}
+        </>
+      );
+    }
+
+    if (tab === 'text') {
+      const hasNote = note.trim().length > 0;
+      return (
+        <>
+          <div className="photo-note">
+            <label className="form-label" htmlFor="product-note">
+              Описание блюда
+            </label>
+            <textarea
+              id="product-note"
+              className="form-control"
+              rows={4}
+              maxLength={NOTE_MAX_LENGTH}
+              placeholder="Например: гречка с куриной грудкой и овощами, около 300 грамм"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              autoFocus
+            />
+            <div
+              className={`photo-note__counter${
+                note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
+              }`}
+            >
+              {note.length} / {NOTE_MAX_LENGTH}
+            </div>
+            <p className="hint mb-0">
+              Опишите блюдо словами — ИИ оценит состав и вес порции. Результат можно будет поправить
+              перед добавлением.
+            </p>
+          </div>
 
           {recognition ? (
             <div className="card mt-3 mb-3">
@@ -318,8 +368,8 @@ export function ProductPicker({
           ) : (
             <button
               className="btn btn-primary w-100 mt-3"
-              onClick={() => void recognize()}
-              disabled={recognizing || !aiEnabled || !canRecognize}
+              onClick={() => void recognizeText()}
+              disabled={recognizing || !aiEnabled || !hasNote}
             >
               {recognizing ? (
                 <>
@@ -329,29 +379,10 @@ export function ProductPicker({
               ) : (
                 <>
                   <IconSparkles size={17} />
-                  {actionLabel}
+                  Распознать по описанию
                 </>
               )}
             </button>
-          )}
-
-          {photo && !recognition && (
-            <div className="d-flex gap-2 mt-2">
-              <button
-                className="btn btn-outline-secondary flex-grow-1"
-                onClick={() => fileRef.current?.click()}
-              >
-                <IconCamera size={16} />
-                Переснять
-              </button>
-              <button
-                className="btn btn-outline-secondary flex-grow-1"
-                onClick={() => galleryRef.current?.click()}
-              >
-                <IconImage size={16} />
-                Из галереи
-              </button>
-            </div>
           )}
 
           {aiError && <div className="alert alert-danger mt-3 mb-0">{aiError}</div>}
@@ -454,7 +485,8 @@ function Tabs({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
   const items: [Tab, string, ReactNode][] = [
     ['search', 'Поиск', <IconSearch key="s" size={15} />],
     ['barcode', 'Штрихкод', <IconBarcode key="b" size={15} />],
-    ['photo', 'ИИ', <IconSparkles key="p" size={15} />],
+    ['photo', 'Фото', <IconCamera key="p" size={15} />],
+    ['text', 'Описание', <IconSparkles key="t" size={15} />],
   ];
   return (
     <>

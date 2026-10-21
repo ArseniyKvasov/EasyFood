@@ -54,14 +54,15 @@ export const shiftDate = (iso: string, days: number): string => {
 export const formatDayTitle = (iso: string): string => {
   const d = fromISODate(iso);
   const now = new Date();
+  // diff — сколько дней от выбранного дня до сегодняшнего.
   const diff = Math.round(
     (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() -
       new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) /
       86_400_000,
   );
   if (diff === 0) return 'Сегодня';
-  if (diff === -1) return 'Вчера';
-  if (diff === 1) return 'Завтра';
+  if (diff === 1) return 'Вчера';
+  if (diff === -1) return 'Завтра';
   return `${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`;
 };
 

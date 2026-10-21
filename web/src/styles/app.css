@@ -715,21 +715,30 @@ h6 {
 .segmented {
   --bs-nav-pills-link-active-color: var(--text);
   --bs-nav-pills-link-active-bg: var(--surface);
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Четыре вкладки не всегда помещаются — прокручиваем по горизонтали */
+  display: flex;
   gap: 0.2rem;
   padding: 0.25rem;
   background-color: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: var(--r);
   margin: 0 0 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.segmented::-webkit-scrollbar {
+  display: none;
 }
 .segmented .nav-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  padding: 0.5rem 0.35rem;
+  flex: 1 0 auto;
+  min-width: max-content;
+  padding: 0.5rem 0.7rem;
   border-radius: 10px;
   font-size: 0.8125rem;
   font-weight: 600;

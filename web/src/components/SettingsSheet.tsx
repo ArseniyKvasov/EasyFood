@@ -5,9 +5,7 @@ import { IconMonitor, IconMoon, IconSun } from './Icons';
 
 type Props = {
   settings: Settings;
-  username: string;
   onSaved: (settings: Settings) => void;
-  onLogout: () => void;
 };
 
 type Draft = {
@@ -18,7 +16,7 @@ type Draft = {
   theme: Settings['theme'];
 };
 
-export function SettingsSheet({ settings, username, onSaved, onLogout }: Props) {
+export function SettingsSheet({ settings, onSaved }: Props) {
   const [draft, setDraft] = useState<Draft>({
     kcal: String(settings.kcal),
     protein: String(settings.protein),
@@ -161,19 +159,6 @@ export function SettingsSheet({ settings, username, onSaved, onLogout }: Props) 
           'Сохранить настройки'
         )}
       </button>
-
-      <section className="settings-section">
-        <span className="ef-label">Аккаунт</span>
-        <div className="d-flex align-items-center justify-content-between gap-3 mt-2">
-          <div>
-            <div style={{ fontWeight: 600 }}>{username}</div>
-            <div className="hint">Вход по логину и паролю</div>
-          </div>
-          <button className="btn btn-outline-secondary" onClick={onLogout}>
-            Выйти
-          </button>
-        </div>
-      </section>
     </>
   );
 }

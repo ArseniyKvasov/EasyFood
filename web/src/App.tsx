@@ -332,19 +332,11 @@ export default function App() {
       <Sheet title="Настройки" onClose={closeAll}>
         <SettingsSheet
           settings={settings ?? { ...targets, theme: 'auto', onboarded: false }}
-          username={user ?? ''}
           onSaved={(s) => {
             setSettings(s);
             closeAll();
             pushToast('Настройки сохранены');
             void load(date, false);
-          }}
-          onLogout={() => {
-            void api.logout().finally(() => {
-              setUser(null);
-              setDiary(null);
-              setSettings(null);
-            });
           }}
         />
       </Sheet>
