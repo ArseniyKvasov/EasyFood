@@ -292,7 +292,6 @@ export function ProductPicker({
                 <IconCamera size={22} />
               </span>
               <b>Сфотографировать</b>
-              <span className="hint">Система предложит камеру или медиатеку</span>
             </button>
           )}
 
