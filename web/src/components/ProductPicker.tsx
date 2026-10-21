@@ -139,7 +139,7 @@ export function ProductPicker({
     setRecognizing(true);
     setAiError(null);
     try {
-      setRecognition(await api.recognize(photo));
+      setRecognition(await api.recognize(photo, note.trim() || undefined));
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
@@ -231,15 +231,36 @@ export function ProductPicker({
             <>
               <img className="photo-preview" src={photo} alt="Выбранное блюдо" />
 
+              {!recognition && (
+                <div className="photo-note">
+                  <label className="form-label" htmlFor="photo-note">
+                    Описание блюда (необязательно)
+                  </label>
+                  <textarea
+                    id="photo-note"
+                    className="form-control"
+                    rows={2}
+                    maxLength={NOTE_MAX_LENGTH}
+                    placeholder="Например: гречка с куриной грудкой и овощами"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                  />
+                  <div
+                    className={`photo-note__counter${
+                      note.length >= NOTE_MAX_LENGTH - 50 ? ' is-warning' : ''
+                    }`}
+                  >
+                    {note.length} / {NOTE_MAX_LENGTH}
+                  </div>
+                </div>
+              )}
+
               {recognition ? (
                 <div className="card mb-3">
                   <div className="card-body">
                     <div className="d-flex align-items-center gap-2 mb-2">
-                      <IconSparkles size={17} />
-                      <b>{recognition.name}</b>
-                      <span className="badge badge-ai">
-                        уверенность {Math.round(recognition.confidence * 100)}%
-                      </span>
+                      <IconSparkles size={17} className="flex-shrink-0" />
+                      <b className="text-truncate recognition__name">{recognition.name}</b>
                     </div>
                     <p className="hint mb-3">
                       {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
@@ -249,12 +270,6 @@ export function ProductPicker({
                     <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
                       <IconCheck />
                       Добавить в «{mealName}»
-                    </button>
-                    <button
-                      className="btn btn-outline-secondary w-100 mt-2"
-                      onClick={() => setRecognition(null)}
-                    >
-                      Распознать заново
                     </button>
                   </div>
                 </div>
@@ -337,11 +352,8 @@ export function ProductPicker({
             <div className="card mt-3 mb-3">
               <div className="card-body">
                 <div className="d-flex align-items-center gap-2 mb-2">
-                  <IconSparkles size={17} />
-                  <b>{recognition.name}</b>
-                  <span className="badge badge-ai">
-                    уверенность {Math.round(recognition.confidence * 100)}%
-                  </span>
+                  <IconSparkles size={17} className="flex-shrink-0" />
+                  <b className="text-truncate recognition__name">{recognition.name}</b>
                 </div>
                 <p className="hint mb-3">
                   {num(recognition.grams)} г · {num(recognition.nutrition.kcal)} ккал на порцию · Б{' '}
@@ -351,12 +363,6 @@ export function ProductPicker({
                 <button className="btn btn-primary w-100" onClick={() => void useRecognition()}>
                   <IconCheck />
                   Добавить в «{mealName}»
-                </button>
-                <button
-                  className="btn btn-outline-secondary w-100 mt-2"
-                  onClick={() => setRecognition(null)}
-                >
-                  Распознать заново
                 </button>
               </div>
             </div>

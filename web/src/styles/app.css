@@ -978,6 +978,12 @@ h6 {
   padding: 1.1rem 1rem;
 }
 
+/* Название распознанного блюда: обрезается, а не ломает вёрстку */
+.recognition__name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .photo-note {
   margin-bottom: 0.75rem;
 }
