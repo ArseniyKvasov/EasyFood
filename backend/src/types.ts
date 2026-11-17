@@ -2,7 +2,14 @@ import 'fastify';
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: { id: number; username: string };
+    /** Заполняется хуком авторизации по действующей сессии. */
+    user?: {
+      id: number;
+      /** Логин в Яндексе. */
+      login: string;
+      displayName: string;
+      avatarUrl: string;
+    };
   }
 }
 

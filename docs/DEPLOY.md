@@ -1,4 +1,4 @@
-# Деплой EasyFood на сервер
+# Деплой BiteBalance на сервер
 
 Параметры из примера:
 
@@ -7,9 +7,14 @@
 | Домен | `food.fastclass.ru` |
 | IP сервера | `194.87.52.231` |
 | Порт приложения на хосте | `127.0.0.1:8080` |
-| Репозиторий | `https://github.com/ArseniyKvasov/EasyFood.git` |
+| Репозиторий | `https://github.com/ArseniyKvasov/EasyFood.git` (пока старое имя) |
 
-Схема: `nginx` (443) → `easyfood-app` (127.0.0.1:8080) → `easyfood-db` (внутренняя сеть Docker).
+Схема: `nginx` (443) → `bitebalance-app` (127.0.0.1:8080) → `bitebalance-db` (внутренняя сеть Docker).
+
+> Проект переименован в BiteBalance. Репозиторий и каталог на сервере пока
+> называются EasyFood — переименуйте их, когда будет удобно: старые адреса
+> репозитория GitHub перенаправляет, а данные в томах и базе сохраняются
+> (см. [«Переход с EasyFood»](#переход-с-easyfood)).
 
 ---
 
@@ -57,7 +62,7 @@ dig +short food.fastclass.ru
 
 ```bash
 cd /opt
-git clone https://github.com/ArseniyKvasov/EasyFood.git
+git clone https://github.com/ArseniyKvasov/EasyFood.git   # пока старое имя репозитория
 cd EasyFood
 
 cp .env.example .env
@@ -75,12 +80,18 @@ APP_PORT=8080
 APP_BIND=127.0.0.1
 
 # Доступ к базе — задайте СВОЙ пароль
-POSTGRES_USER=easyfood
+POSTGRES_USER=bitebalance
 POSTGRES_PASSWORD=CHANGE_ME_strong_password
-POSTGRES_DB=easyfood
+POSTGRES_DB=bitebalance
 
 # CORS не нужен, если фронтенд и API отдаёт один и тот же nginx
 CORS_ORIGIN=
+
+# Вход через Яндекс ID (обязательно, см. раздел ниже)
+YANDEX_CLIENT_ID=
+YANDEX_CLIENT_SECRET=
+YANDEX_REDIRECT_URI=https://food.fastclass.ru/api/auth/yandex/callback
+YANDEX_SCOPE=login:email login:info login:avatar
 
 # Поиск по штрихкодам и названиям через Open Food Facts
 OPEN_FOOD_FACTS_ENABLED=true
@@ -93,6 +104,42 @@ OPENAI_REASONING_EFFORT=
 OPENAI_TEMPERATURE=0.2
 OPENAI_MAX_TOKENS=
 OPENAI_RESPONSE_FORMAT=json_object
+```
+
+### Вход через Яндекс ID
+
+Логина с паролем нет — вход только через аккаунт Яндекса. Приложение
+создаётся один раз:
+
+1. <https://oauth.yandex.ru> → **«Создать приложение»** → платформа
+   **«Веб-сервисы»**.
+2. **Redirect URI**: `https://food.fastclass.ru/api/auth/yandex/callback` —
+   дословно этот адрес, включая схему и путь. Можно добавить второй адрес для
+   локальной разработки: `http://localhost:3000/api/auth/yandex/callback`.
+3. Права: **«Доступ к адресу электронной почты»**, **«Доступ к логину, имени и
+   фамилии, полу»**, **«Доступ к портрету пользователя»**.
+4. ClientID и Client secret — в `.env`:
+
+```bash
+YANDEX_CLIENT_ID=...
+YANDEX_CLIENT_SECRET=...
+YANDEX_REDIRECT_URI=https://food.fastclass.ru/api/auth/yandex/callback
+YANDEX_SCOPE=login:email login:info login:avatar
+```
+
+`YANDEX_REDIRECT_URI` должен совпадать с настройкой приложения: при
+расхождении Яндекс вернёт `redirect_uri mismatch` и вход закончится экраном
+с ошибкой. Пустое значение — адрес собирается из заголовков
+`x-forwarded-proto` и `Host` (удобно локально, но в продакшене лучше задать
+явно).
+
+Сессия живёт 30 дней, выход — «Выйти из аккаунта» в настройках. Миграция
+`007_yandex_auth` удаляет пароли и старые сессии; прежние аккаунты остаются в
+базе, но `yandex_id` у них пустой. Привязать старый дневник к Яндексу:
+
+```bash
+docker compose exec -T db psql -U bitebalance bitebalance -c \
+  "UPDATE users SET yandex_id = '<id>', login = '<логин>' WHERE id = <id аккаунта>;"
 ```
 
 ### OpenRouter + Claude Haiku 5.5
@@ -150,81 +197,68 @@ docker compose logs -f maintenance | grep каталог
 **Сколько каталог наполнен:**
 
 ```bash
-docker compose exec -T db psql -U easyfood -d easyfood \
+docker compose exec -T db psql -U bitebalance -d bitebalance \
   -c "SELECT count(*) FROM products WHERE user_id IS NULL AND source = 'np';" \
   -c "SELECT provider, used FROM api_usage;"
 ```
 
-### S3: фото пользователей и бэкапы базы
+### Фото: base64 вместо хранилища
 
-Если `S3_BUCKET`, `S3_ACCESS_KEY_ID` и `S3_SECRET_ACCESS_KEY` заданы, приложение
-работает иначе:
+Отдельного хранилища нет. Браузер ужимает снимок до 1024 px, кодирует его в
+base64 (data URL) и отправляет прямо в теле запроса `POST /api/recognize`.
+Сервер держит байты только на время запроса к ИИ и сразу их выбрасывает:
+ничего не сохраняется ни на диске, ни в облаке.
 
-- фото из браузера уходит **прямо в бакет** по подписанной ссылке — сервер
-  приложения байты картинки не видит, а ИИ забирает её из бакета по своей
-  подписанной ссылке;
-- сервис `maintenance` складывает в бакет дампы базы (`pg_dump` в gzip) и
-  удаляет бэкапы старше `S3_BACKUP_KEEP_DAYS` дней.
+Ограничения: тело запроса — до 12 МБ (`bodyLimit` в `backend/src/server.ts`),
+сама картинка в base64 — до 8 МБ.
 
-Без этих переменных всё работает как раньше: фото идёт через сервер,
-бэкапы не делаются.
+### Бэкапы базы
+
+Сервис `maintenance` раз в `BACKUP_INTERVAL_HOURS` делает `pg_dump`, сжимает
+его gzip и кладёт в локальную папку `BACKUP_DIR` (по умолчанию `data/backups`).
+Дампы старше `BACKUP_KEEP_DAYS` дней удаляются.
 
 ```bash
-S3_BUCKET=easyfood
-S3_ENDPOINT_URL=                 # пусто — AWS S3; Yandex Cloud: https://storage.yandexcloud.net
-S3_REGION_NAME=ru-central1
-S3_ACCESS_KEY_ID=...
-S3_SECRET_ACCESS_KEY=...
-S3_FORCE_PATH_STYLE=false        # MinIO — true
-S3_LOCATION=uploads              # папка с фото пользователей
-S3_BACKUP_LOCATION=backups       # папка с дампами базы
-S3_QUERYSTRING_EXPIRE=900        # срок жизни подписанной ссылки, секунд
-S3_BACKUP_KEEP_DAYS=14           # сколько дней хранить бэкапы
-S3_UPLOAD_KEEP_HOURS=24          # сколько часов может жить загруженная картинка
+BACKUP_DIR=data/backups    # относительный путь — от корня проекта
+BACKUP_KEEP_DAYS=14        # сколько дней хранить дампы
 ```
 
-**CORS бакета** — без него браузер не сможет положить файл напрямую:
+В Docker папка смонтирована томом `backups` — дампы переживают
+пересоздание контейнера. Забрать их на хост:
 
 ```bash
-aws s3api put-bucket-cors --bucket easyfood --cors-configuration file://deploy/s3-cors.json
-```
-
-**Жизненный цикл** — фото нужны только на время распознавания, их стоит
-удалять:
-
-```bash
-aws s3api put-bucket-lifecycle-configuration \
-  --bucket easyfood --lifecycle-configuration file://deploy/s3-lifecycle.json
-```
-
-### Сколько живут фото в бакете
-
-Картинка удаляется тремя способами — вместе они дают гарантию, что снимок
-не пролежит в бакете дольше суток:
-
-1. **Сразу после создания продукта** — приложение удаляет объект, как только
-   из фото сделан продукт.
-2. **При закрытии шторки** — если пользователь бросил распознавание, фото
-   удаляется при закрытии окна.
-3. **Чистка по расписанию** — сервис `maintenance` раз в
-   `UPLOAD_CLEANUP_INTERVAL_HOURS` удаляет всё, что старше
-   `S3_UPLOAD_KEEP_HOURS`. Порог считается с запасом на интервал чистки,
-   поэтому картинка не переживает сутки.
-
-Плюс правило жизненного цикла бакета (`deploy/s3-lifecycle.json`) — последний
-страховочный круг на стороне S3.
-
-**Проверка:**
-
-```bash
-docker compose exec app node -e "import('./backend/dist/config.js').then(m=>console.log(m.s3Enabled()))"
-# true
+docker compose cp maintenance:/app/data/backups ./backups
 ```
 
 `OPENAI_REASONING_EFFORT` уходит в OpenRouter как `reasoning.effort`
 (`low`/`minimal`/`medium`/`high`/`xhigh`/`max`/`none`). Пустое значение —
 параметр не отправляется, и модель думает на своём дефолте (у Haiku 5.5 это
 `medium`).
+
+### Напоминания (Web Push)
+
+Браузер подписывается на push при открытии сайта: если разрешение ещё не
+спрашивали, оно запрашивается заново при каждой загрузке страницы. Подписка
+привязана к аккаунту и лежит в таблице `push_subscriptions`.
+
+Каждый день в 07:00, 13:00, 17:00 и 20:30 МСК сервер рассылает push
+«You can now». Доставка работает и с закрытой вкладкой, но только по HTTPS
+(или на localhost) — этого требует браузер.
+
+Ключи VAPID генерируются один раз и прописываются в `.env`:
+
+```bash
+npm run vapid
+```
+
+```bash
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:admin@example.com
+```
+
+Без ключей напоминания выключены: `/api/push/status` вернёт `enabled: false`,
+а приложение продолжит работать как обычно.
 
 ### RouterAI (оплата в рублях)
 
@@ -243,7 +277,7 @@ Azure, Google Vertex, AWS Bedrock, Claude Platform on AWS); `reasoning`
 ошибках разбора JSON переключите `OPENAI_RESPONSE_FORMAT` на `json_object`.
 
 > Если доступ к репозиторию закрыт, используйте SSH-ключ:
-> `git clone git@github.com:ArseniyKvasov/EasyFood.git`
+> `git clone git@github.com:ArseniyKvasov/EasyFood.git` (пока старое имя)
 
 ---
 
@@ -388,16 +422,49 @@ docker image prune -f
 
 Миграции применяются автоматически при старте контейнера (`backend/src/migrations.ts`).
 
-Сервис `maintenance` (бэкапы в S3 и чистка истории) обновляется тем же образом —
+Сервис `maintenance` (бэкапы базы и чистка истории) обновляется тем же образом —
 он собран из того же образа.
+
+### Переход с EasyFood
+
+Переименование не требует переноса данных: тома в `docker-compose.yml`
+закреплены за прежними именами (`easyfood_easyfood-db`,
+`easyfood_easyfood-backups`), а роль и база остаются те, что записаны в
+`.env` (`POSTGRES_USER`, `POSTGRES_DB` — у старой установки это
+`easyfood`). В этом случае в командах `psql` подставляйте
+`-U easyfood easyfood`.
+
+1. Остановите старый стек: у него другое имя проекта, и порт 8080 освободится
+   только после остановки.
+
+   ```bash
+   cd /opt/EasyFood && docker compose down
+   ```
+
+2. Обновите код и поднимите стек под новым именем:
+
+   ```bash
+   git pull
+   docker compose up -d --build
+   ```
+
+3. Войдите заново: куки переименованы (`ef_session` → `bb_session`,
+   `ef_oauth` → `bb_oauth`), старые сессии больше не действуют.
+
+Проверьте, что данные на месте:
+
+```bash
+docker compose exec -T db psql -U easyfood easyfood -c "SELECT count(*) FROM entries;"
+```
 
 ---
 
 ## 10. Бэкапы
 
-### Автоматически в S3
+### Автоматически в локальную папку
 
-Сервис `maintenance` делает дамп базы и складывает его в бакет:
+Сервис `maintenance` делает дамп базы и кладёт его в `BACKUP_DIR`
+(в Docker — том `backups`):
 
 ```bash
 docker compose ps maintenance            # статус
@@ -408,7 +475,7 @@ docker compose logs -f maintenance       # логи
 
 ```bash
 BACKUP_INTERVAL_HOURS=24                 # как часто делать дамп
-S3_BACKUP_KEEP_DAYS=14                   # сколько дней хранить
+BACKUP_KEEP_DAYS=14                      # сколько дней хранить
 ```
 
 Разовый бэкап вручную:
@@ -417,24 +484,24 @@ S3_BACKUP_KEEP_DAYS=14                   # сколько дней хранит�
 docker compose exec maintenance node backend/dist/scripts/maintenance.js --once
 ```
 
-### Ручной дамп без S3
+### Ручной дамп
 
 ```bash
 # Дамп базы
-docker compose exec -T db pg_dump -U easyfood easyfood | gzip > backup-$(date +%F).sql.gz
+docker compose exec -T db pg_dump -U bitebalance bitebalance | gzip > backup-$(date +%F).sql.gz
 
 # Восстановление
-gunzip -c backup-2026-10-21.sql.gz | docker compose exec -T db psql -U easyfood easyfood
+gunzip -c backup-2026-10-21.sql.gz | docker compose exec -T db psql -U bitebalance bitebalance
 ```
 
-### Восстановление из S3
+### Восстановление из дампа
 
 ```bash
-# Скачать последний дамп
-aws s3 cp s3://easyfood/backups/easyfood-2026-10-21T03-00-00.000Z.sql.gz /tmp/backup.sql.gz
+# Забрать дампы из тома на хост
+docker compose cp maintenance:/app/data/backups ./backups
 
 # Залить в базу
-gunzip -c /tmp/backup.sql.gz | docker compose exec -T db psql -U easyfood easyfood
+gunzip -c backups/bitebalance-2026-10-21T03-00-00.sql.gz | docker compose exec -T db psql -U bitebalance bitebalance
 ```
 
 Дамп сделан с ключами `--clean --if-exists`, поэтому restore пересоздаёт
@@ -461,7 +528,7 @@ RETENTION_INTERVAL_HOURS=6
 Сколько записей осталось:
 
 ```bash
-docker compose exec -T db psql -U easyfood easyfood \
+docker compose exec -T db psql -U bitebalance bitebalance \
   -c "SELECT count(*), min(day), max(day) FROM entries;"
 ```
 
@@ -491,6 +558,14 @@ docker system df                 # сколько места заняли обр
 
 **Камера не работает** — `getUserMedia` требует защищённого контекста (HTTPS) либо
 `localhost`. По IP-адресу камера работать не будет — нужен домен с сертификатом.
+
+**«Вход через Яндекс не настроен»** — пустые `YANDEX_CLIENT_ID`/`YANDEX_CLIENT_SECRET`
+или контейнер не перезапущен после правки `.env`:
+`docker compose up -d` и `docker compose logs app | grep -i yandex`.
+
+**«Сессия входа истекла» / `redirect_uri mismatch`** — `YANDEX_REDIRECT_URI`
+не совпадает с Redirect URI в приложении Яндекса, либо браузер не пустил
+cookie (например, блокировщик). Проверьте адрес и повторите вход.
 
 **Не находится продукт по штрихкоду** — проверьте, что сервер ходит в интернет:
 `docker compose exec app wget -qO- https://world.openfoodfacts.org/api/v2/product/4600000000001.json | head -c 100`.

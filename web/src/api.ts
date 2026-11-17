@@ -1,4 +1,13 @@
-import type { Diary, Entry, MonthSummary, Nutrition, Product, Recognition, Settings } from './types';
+import type {
+  Diary,
+  Entry,
+  MonthSummary,
+  Nutrition,
+  Product,
+  Recognition,
+  Settings,
+  User,
+} from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -37,15 +46,12 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
+/** Вход через Яндекс ID: сервер сам уводит на страницу согласия. */
+export const YANDEX_SIGN_IN_URL = '/api/auth/yandex/start';
+
 export const api = {
   // --- Аккаунт ---
-  me: () => request<{ username: string }>('/api/auth/me'),
-
-  login: (input: { username: string; password: string }) =>
-    request<{ username: string }>('/api/auth/login', json(input)),
-
-  register: (input: { username: string; password: string }) =>
-    request<{ username: string }>('/api/auth/register', json(input)),
+  me: () => request<User>('/api/auth/me'),
 
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
 
@@ -131,22 +137,17 @@ export const api = {
 
   aiStatus: () => request<{ enabled: boolean }>('/api/recognize/status'),
 
-  /** Настроено ли S3-хранилище: если да — картинки идут напрямую в бакет. */
-  uploadStatus: () => request<{ enabled: boolean }>('/api/uploads/status'),
-
-  /** Подписанная ссылка на загрузку: браузер кладёт файл прямо в S3. */
-  presignUpload: (input: { contentType: string; size: number }) =>
-    request<{ key: string; uploadUrl: string; contentType: string; expiresIn: number }>(
-      '/api/uploads/presign',
-      json(input),
-    ),
-
-  /** Удалить загруженный файл — например, если распознавание не удалось. */
-  deleteUpload: (key: string) =>
-    request<{ ok: true }>(`/api/uploads?key=${encodeURIComponent(key)}`, { method: 'DELETE' }),
-
-  recognize: (input: { key?: string; image?: string; note?: string }) =>
+  /** Фото уходит в теле запроса как data URL (base64) — хранилища нет. */
+  recognize: (input: { image: string; note?: string }) =>
     request<Recognition>('/api/recognize', json(input)),
+
+  // --- Напоминания (Web Push) ---
+  pushStatus: () => request<{ enabled: boolean; subscribed: boolean }>('/api/push/status'),
+
+  pushPublicKey: () => request<{ key: string }>('/api/push/public-key'),
+
+  pushSubscribe: (subscription: PushSubscriptionJSON) =>
+    request<{ ok: true }>('/api/push/subscribe', json({ subscription })),
 
   recognizeByText: (description: string) =>
     request<Recognition>('/api/recognize/text', json({ description })),

@@ -1,3 +1,13 @@
+/** Аккаунт, под которым открыт дневник. Вход — только через Яндекс ID. */
+export type User = {
+  /** Логин в Яндексе. */
+  login: string;
+  /** Имя из профиля Яндекса. */
+  displayName: string;
+  /** Ссылка на портрет; пусто, если пользователь не открыл доступ к нему. */
+  avatarUrl: string;
+};
+
 export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export type Nutrition = {

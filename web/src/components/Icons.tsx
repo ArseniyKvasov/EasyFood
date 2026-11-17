@@ -153,3 +153,40 @@ export const IconRefresh = ({ size = 17, ...p }: IconProps) => (
     <path d="M21 4v5h-5" />
   </svg>
 );
+
+export const IconPhonePlus = ({ size = 20, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <rect x="6" y="2.5" width="12" height="19" rx="2.6" />
+    <path d="M12 9.5v5M9.5 12h5" />
+  </svg>
+);
+
+export const IconApple = ({ size = 18, ...p }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...p}>
+    <path d="M16.7 12.7c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.9-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.2 1.2 9.6.8 1.2 1.7 2.5 3 2.4 1.2 0 1.6-.8 3.1-.8s1.9.8 3.1.8c1.3 0 2.1-1.2 2.9-2.4.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.5-1-2.5-3.9ZM14.4 5.6c.7-.8 1.1-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4Z" />
+  </svg>
+);
+
+export const IconAndroid = ({ size = 18, ...p }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...p}>
+    <path d="M7.2 10.2h9.6c.5 0 .9.4.9.9v4.6a2.4 2.4 0 0 1-2.4 2.4H8.7a2.4 2.4 0 0 1-2.4-2.4v-4.6c0-.5.4-.9.9-.9Z" />
+    <path d="M6.5 10a5.5 5.5 0 0 1 11 0Z" />
+    <path
+      d="M6.4 9.6 5.1 6.9M17.6 9.6l1.3-2.7"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <circle cx="9.4" cy="7.5" r=".8" fill="var(--surface)" />
+    <circle cx="14.6" cy="7.5" r=".8" fill="var(--surface)" />
+  </svg>
+);
+
+export const IconLogout = ({ size = 17, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <path d="m16 17 5-5-5-5" />
+    <path d="M21 12H9" />
+  </svg>
+);

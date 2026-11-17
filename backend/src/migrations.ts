@@ -177,6 +177,47 @@ const migrations: Migration[] = [
       );
     `,
   },
+  {
+    id: '006_push',
+    sql: `
+      -- Подписки браузеров на Web Push: напоминания в 7:00, 13:00, 17:00 и 20:30 МСК.
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        endpoint   TEXT NOT NULL,
+        p256dh     TEXT NOT NULL,
+        auth       TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_uniq
+        ON push_subscriptions (endpoint);
+      CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx
+        ON push_subscriptions (user_id);
+    `,
+  },
+  {
+    id: '007_yandex_auth',
+    sql: `
+      -- Вход теперь только через Яндекс ID: логин с паролем убран.
+      -- Старые аккаунты остаются в таблице вместе с записями дневника,
+      -- но yandex_id у них пустой — войти под ними больше нельзя.
+      ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
+      ALTER TABLE users DROP COLUMN IF EXISTS username;
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS yandex_id TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS login TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+      CREATE UNIQUE INDEX IF NOT EXISTS users_yandex_id_uniq
+        ON users (yandex_id) WHERE yandex_id IS NOT NULL;
+
+      -- Сессии, выданные по паролю, больше не действуют.
+      DELETE FROM sessions;
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

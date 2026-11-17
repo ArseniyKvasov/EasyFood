@@ -29,8 +29,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   databaseUrl:
     process.env.DATABASE_URL ??
-    `postgresql://${process.env.POSTGRES_USER ?? 'easyfood'}:${process.env.POSTGRES_PASSWORD ?? 'easyfood'}` +
-      `@${process.env.POSTGRES_HOST ?? 'localhost'}:${process.env.POSTGRES_PORT ?? '5432'}/${process.env.POSTGRES_DB ?? 'easyfood'}`,
+    `postgresql://${process.env.POSTGRES_USER ?? 'bitebalance'}:${process.env.POSTGRES_PASSWORD ?? 'bitebalance'}` +
+      `@${process.env.POSTGRES_HOST ?? 'localhost'}:${process.env.POSTGRES_PORT ?? '5432'}/${process.env.POSTGRES_DB ?? 'bitebalance'}`,
   corsOrigin: (process.env.CORS_ORIGIN ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -59,42 +59,51 @@ export const config = {
     reasoningEffort: reasoningEffort(process.env.OPENAI_REASONING_EFFORT),
     responseFormat: (process.env.OPENAI_RESPONSE_FORMAT ?? 'json_object').trim(),
   },
-  s3: {
-    bucket: process.env.S3_BUCKET ?? '',
-    /** Префикс внутри бакета для картинок пользователей. */
-    location: (process.env.S3_LOCATION ?? 'uploads').replace(/^\/+|\/+$/g, ''),
-    /** Префикс внутри бакета для дампов базы. */
-    backupLocation: (process.env.S3_BACKUP_LOCATION ?? 'backups').replace(/^\/+|\/+$/g, ''),
-    /** Пусто — стандартный AWS S3; для Yandex Cloud: https://storage.yandexcloud.net */
-    endpointUrl: process.env.S3_ENDPOINT_URL ?? '',
-    region: process.env.S3_REGION_NAME ?? 'ru-central1',
-    accessKeyId: process.env.S3_ACCESS_KEY_ID ?? '',
-    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? '',
-    /** MinIO и другие совместимые хранилища требуют адрес вида bucket/host. */
-    forcePathStyle: bool(process.env.S3_FORCE_PATH_STYLE, false),
-    /** Сколько живёт подписанная ссылка на скачивание, секунд. */
-    signedUrlExpire: num(process.env.S3_QUERYSTRING_EXPIRE, 900),
-    /** Сколько дней хранить бэкапы базы в S3. */
-    backupKeepDays: num(process.env.S3_BACKUP_KEEP_DAYS, 14),
-    /** Сколько часов может жить загруженная картинка: дальше её удаляет чистка. */
-    uploadKeepHours: num(process.env.S3_UPLOAD_KEEP_HOURS, 24),
+  yandex: {
+    /** Идентификатор и секрет приложения из https://oauth.yandex.ru */
+    clientId: (process.env.YANDEX_CLIENT_ID ?? '').trim(),
+    clientSecret: (process.env.YANDEX_CLIENT_SECRET ?? '').trim(),
+    /**
+     * Адрес возврата после входа. Должен дословно совпадать с Redirect URI
+     * в настройках приложения. Пусто — собирается из заголовков запроса
+     * (x-forwarded-proto + host), что удобно для локальной разработки.
+     */
+    redirectUri: (process.env.YANDEX_REDIRECT_URI ?? '').trim(),
+    /** Права, которые запрашиваем у Яндекс ID. Пусто — только id и логин. */
+    scope: (process.env.YANDEX_SCOPE ?? 'login:email login:info login:avatar').trim(),
+    /** Базовые адреса API Яндекса: меняются только в тестах с mock-сервером. */
+    oauthBaseUrl: (process.env.YANDEX_OAUTH_BASE_URL ?? 'https://oauth.yandex.ru').replace(/\/+$/, ''),
+    loginBaseUrl: (process.env.YANDEX_LOGIN_BASE_URL ?? 'https://login.yandex.ru').replace(/\/+$/, ''),
+  },
+  push: {
+    /** Ключи VAPID для Web Push. Сгенерировать: npm run vapid */
+    publicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    privateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    /** Контакт администратора: mailto:... или https://... */
+    subject: process.env.VAPID_SUBJECT ?? 'mailto:admin@bitebalance.local',
+  },
+  backup: {
+    /** Папка для дампов базы (pg_dump в gzip). Относительный путь — от корня проекта. */
+    dir: (process.env.BACKUP_DIR ?? 'data/backups').replace(/\/+$/, ''),
+    /** Сколько дней хранить дампы. */
+    keepDays: num(process.env.BACKUP_KEEP_DAYS, 14),
+    /** Как часто делать бэкап базы, часов. */
+    intervalHours: num(process.env.BACKUP_INTERVAL_HOURS, 24),
   },
   maintenance: {
     /** Сколько дней хранить историю дневника. */
     historyRetentionDays: num(process.env.HISTORY_RETENTION_DAYS, 60),
-    /** Как часто делать бэкап базы в S3, часов. */
-    backupIntervalHours: num(process.env.BACKUP_INTERVAL_HOURS, 24),
     /** Как часто чистить историю, часов. */
     retentionIntervalHours: num(process.env.RETENTION_INTERVAL_HOURS, 6),
-    /** Как часто удалять старые картинки из S3, часов. */
-    uploadCleanupIntervalHours: num(process.env.UPLOAD_CLEANUP_INTERVAL_HOURS, 1),
   },
 };
 
 export const aiEnabled = () => config.ai.apiKey.length > 0;
 
-/** S3 настроен — можно грузить картинки напрямую в хранилище. */
-export const s3Enabled = () =>
-  config.s3.bucket.length > 0 &&
-  config.s3.accessKeyId.length > 0 &&
-  config.s3.secretAccessKey.length > 0;
+/** Заданы ли ключи приложения Яндекс ID — без них вход невозможен. */
+export const yandexEnabled = () =>
+  config.yandex.clientId.length > 0 && config.yandex.clientSecret.length > 0;
+
+/** Заданы ли ключи VAPID — без них Web Push не работает. */
+export const pushEnabled = () =>
+  config.push.publicKey.length > 0 && config.push.privateKey.length > 0;

@@ -4,9 +4,9 @@ import { findSession, parseCookies } from '../services/auth.js';
 /** Эндпоинты, доступные без сессии. */
 const PUBLIC_PATHS = new Set([
   '/api/health',
-  '/api/auth/login',
-  '/api/auth/register',
   '/api/auth/logout',
+  '/api/auth/yandex/start',
+  '/api/auth/yandex/callback',
 ]);
 
 /**
@@ -25,7 +25,7 @@ export async function authHook(app: FastifyInstance): Promise<void> {
 
     if (PUBLIC_PATHS.has(path)) return;
 
-    const token = parseCookies(req.headers.cookie).ef_session;
+    const token = parseCookies(req.headers.cookie).bb_session;
     if (!token) {
       return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Требуется вход в аккаунт' });
     }

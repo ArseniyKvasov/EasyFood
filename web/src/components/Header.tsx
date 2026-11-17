@@ -21,7 +21,7 @@ export function Header({ date, theme, onPrev, onNext, onOpenCalendar, onTheme, o
               <span className="brand__mark">
                 <IconLeaf size={19} />
               </span>
-              <span className="brand__text">EasyFood</span>
+              <span className="brand__text">BiteBalance</span>
             </span>
           </div>
 

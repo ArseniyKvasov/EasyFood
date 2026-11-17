@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from './api';
 import { shiftDate, today } from './lib/date';
+import { initPush, syncPushSubscription } from './lib/push';
 import { num } from './lib/format';
-import type { Diary, Entry, MealId, Product, Settings } from './types';
+import type { Diary, Entry, MealId, Product, Settings, User } from './types';
 import { Header } from './components/Header';
 import { CalorieRing } from './components/CalorieRing';
 import { MacroList } from './components/MacroList';
@@ -13,6 +14,8 @@ import { ProductEditor } from './components/ProductEditor';
 import { SettingsSheet } from './components/SettingsSheet';
 import { Sheet } from './components/Sheet';
 import { AuthScreen } from './components/AuthScreen';
+import { InstallBanner } from './components/InstallBanner';
+import { InstallGuide } from './components/InstallGuide';
 import { MonthCalendar } from './components/MonthCalendar';
 import { ToastHost, type ToastItem } from './components/Toast';
 import { IconRefresh } from './components/Icons';
@@ -22,6 +25,7 @@ type SheetState =
   | { kind: 'grams'; product: Product; entryId: number | null; grams: number; meal: MealId }
   | { kind: 'editor'; product: Product | null; prefill: ProductPrefill }
   | { kind: 'settings' }
+  | { kind: 'install' }
   | { kind: 'calendar' };
 
 /** Данные, с которыми открывается редактор нового продукта. */
@@ -36,6 +40,25 @@ type ProductPrefill = {
   servingG?: number;
 };
 
+/**
+ * Сервер возвращает на экран входа с ?auth_error=код, если вход через Яндекс
+ * не удался. Читаем код один раз при загрузке модуля и сразу чистим адрес,
+ * чтобы ошибка не всплывала после перезагрузки страницы.
+ */
+const initialAuthError = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('auth_error');
+  if (!code) return null;
+  params.delete('auth_error');
+  const query = params.toString();
+  window.history.replaceState(
+    {},
+    '',
+    `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+  );
+  return code;
+})();
+
 const MEAL_NAMES: Record<MealId, string> = {
   breakfast: 'Завтрак',
   lunch: 'Обед',
@@ -44,7 +67,8 @@ const MEAL_NAMES: Record<MealId, string> = {
 };
 
 export default function App() {
-  const [user, setUser] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [authError, setAuthError] = useState<string | null>(initialAuthError);
   const [authChecked, setAuthChecked] = useState(false);
   const [date, setDate] = useState(today());
   const [diary, setDiary] = useState<Diary | null>(null);
@@ -68,10 +92,24 @@ export default function App() {
   useEffect(() => {
     api
       .me()
-      .then((r) => setUser(r.username))
+      .then((r) => {
+        setUser(r);
+        setAuthError(null);
+      })
       .catch(() => setUser(null))
       .finally(() => setAuthChecked(true));
   }, []);
+
+  // Разрешение на уведомления спрашиваем при каждом открытии страницы,
+  // пока браузер его не запомнил.
+  useEffect(() => {
+    void initPush();
+  }, []);
+
+  // Подписка на напоминания возможна только с сессией.
+  useEffect(() => {
+    if (user) void syncPushSubscription();
+  }, [user]);
 
   const pushToast = useCallback((text: string, action?: ToastItem['action']) => {
     const id = ++toastId.current;
@@ -150,6 +188,21 @@ export default function App() {
     }),
     [settings],
   );
+
+  /** Выход: гасим сессию и возвращаемся на экран входа. */
+  const logout = useCallback(async () => {
+    try {
+      await api.logout();
+    } catch {
+      /* даже если сервер не ответил, локально выходим */
+    }
+    setUser(null);
+    setDiary(null);
+    setSettings(null);
+    setAuthError(null);
+    setStack([]);
+    setClosing(false);
+  }, []);
 
   const closeAll = useCallback(() => {
     setStack((s) => {
@@ -430,10 +483,20 @@ export default function App() {
       );
     }
 
+    if (top.kind === 'install') {
+      return (
+        <Sheet title="Добавить на главный экран" onClose={closeAll}>
+          <InstallGuide />
+        </Sheet>
+      );
+    }
+
     return (
       <Sheet title="Настройки" onClose={closeAll}>
         <SettingsSheet
           settings={settings ?? { ...targets, theme: 'auto', onboarded: false }}
+          user={user}
+          onLogout={() => void logout()}
           onSaved={(s) => {
             setSettings(s);
             themeChanged.current = true;
@@ -458,14 +521,7 @@ export default function App() {
   }
 
   if (!user) {
-    return (
-      <AuthScreen
-        onAuthed={(username) => {
-          setUser(username);
-          setAuthChecked(true);
-        }}
-      />
-    );
+    return <AuthScreen error={authError} />;
   }
 
   return (
@@ -496,7 +552,7 @@ export default function App() {
             <div className="summary">
               <section className="card ring-card">
                 <div className="card-body">
-                  <p className="ef-label">Калории</p>
+                  <p className="bb-label">Калории</p>
                   {loading && !diary ? (
                     <div
                       className="skeleton"
@@ -549,6 +605,8 @@ export default function App() {
             </div>
           </div>
         </div>
+
+        <InstallBanner onOpen={() => push({ kind: 'install' })} />
       </main>
 
       {top && (

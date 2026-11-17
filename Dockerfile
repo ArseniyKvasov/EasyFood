@@ -31,7 +31,7 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# postgresql16-client — pg_dump для бэкапа базы в S3. Версия 16 совпадает
+# postgresql16-client — pg_dump для бэкапа базы в локальную папку. Версия 16 совпадает
 # с сервером (postgres:16-alpine), поэтому дамп восстанавливается без
 # лишних предупреждений.
 RUN apk add --no-cache tini postgresql16-client && addgroup -S app && adduser -S app -G app
@@ -44,6 +44,9 @@ RUN npm cache clean --force
 
 COPY --from=api-build /app/backend/dist ./backend/dist
 COPY --from=web-build /app/web/dist ./web/dist
+
+# Каталог для дампов базы: maintenance пишет сюда, compose монтирует том.
+RUN mkdir -p /app/data/backups && chown -R app:app /app/data
 
 USER app
 EXPOSE 3000

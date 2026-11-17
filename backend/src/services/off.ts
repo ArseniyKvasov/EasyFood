@@ -2,7 +2,7 @@ import { config } from '../config.js';
 import type { Nutrition, Product } from '../types.js';
 
 const BASE = 'https://world.openfoodfacts.org';
-const UA = 'EasyFood/1.0 (+https://github.com/easyfood)';
+const UA = 'BiteBalance/1.0 (+https://github.com/ArseniyKvasov/EasyFood)';
 
 type OffNutriments = {
   'energy-kcal_100g'?: number;

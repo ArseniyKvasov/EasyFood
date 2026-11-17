@@ -150,7 +150,7 @@ export function ProductEditor({ product, prefill, onSaved, onDeleted }: Props) {
     <>
       {!product && prefill.barcode && (
         <p className="hint mb-3">
-          Штрихкод <b>{prefill.barcode}</b> уже подставлен — осталось вписать название и КБЖУ.
+          Штрихкод <b>{prefill.barcode}</b> уже подставлен - осталось вписать название и КБЖУ.
         </p>
       )}
 

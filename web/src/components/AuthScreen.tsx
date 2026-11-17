@@ -1,42 +1,25 @@
-import { useState, type FormEvent } from 'react';
-import { api, ApiError } from '../api';
+import { YANDEX_SIGN_IN_URL } from '../api';
 import { IconLeaf } from './Icons';
 
 type Props = {
-  onAuthed: (username: string) => void;
+  /** Код ошибки из ?auth_error=… — сервер возвращает его после неудачного входа. */
+  error?: string | null;
 };
 
-type Mode = 'login' | 'register';
+const ERROR_MESSAGES: Record<string, string> = {
+  cancelled: 'Вход отменён. Нажмите кнопку и попробуйте ещё раз.',
+  denied: 'Яндекс не предоставил доступ к аккаунту.',
+  cookie: 'Браузер не передал cookie входа. Разрешите cookie для сайта и попробуйте снова.',
+  state: 'Сессия входа истекла. Попробуйте войти ещё раз.',
+  code: 'Яндекс не вернул код подтверждения. Попробуйте ещё раз.',
+  token: 'Яндекс не подтвердил вход. Попробуйте ещё раз.',
+  profile: 'Не удалось получить профиль Яндекса. Попробуйте ещё раз.',
+  config: 'Вход через Яндекс не настроен на сервере.',
+  internal: 'Не удалось выполнить вход. Попробуйте ещё раз.',
+};
 
-export function AuthScreen({ onAuthed }: Props) {
-  const [mode, setMode] = useState<Mode>('login');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const res =
-        mode === 'login'
-          ? await api.login({ username, password })
-          : await api.register({ username, password });
-      onAuthed(res.username);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не удалось выполнить вход');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const switchMode = (next: Mode) => {
-    setMode(next);
-    setError(null);
-  };
+export function AuthScreen({ error }: Props) {
+  const message = error ? (ERROR_MESSAGES[error] ?? ERROR_MESSAGES.internal) : null;
 
   return (
     <div className="auth">
@@ -46,85 +29,27 @@ export function AuthScreen({ onAuthed }: Props) {
             <span className="brand__mark">
               <IconLeaf size={20} />
             </span>
-            <span className="auth__title">EasyFood</span>
+            <span className="auth__title">BiteBalance</span>
           </div>
 
-          <h1 className="auth__heading">
-            {mode === 'login' ? 'Вход в аккаунт' : 'Создание аккаунта'}
-          </h1>
+          <h1 className="auth__heading">Вход в дневник</h1>
           <p className="hint mb-4">
-            {mode === 'login'
-              ? 'Введите логин и пароль, чтобы продолжить вести дневник питания.'
-              : 'Придумайте логин и пароль — под ними будут храниться ваши записи.'}
+            Дневник питания привязан к аккаунту Яндекс ID - под ним хранятся ваши записи,
+            продукты и настройки.
           </p>
 
-          <form onSubmit={submit} noValidate>
-            <label className="form-label" htmlFor="auth-user">
-              Логин
-            </label>
-            <input
-              id="auth-user"
-              className="form-control mb-3"
-              value={username}
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="ivan"
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
+          {message && <div className="alert alert-danger">{message}</div>}
 
-            <label className="form-label" htmlFor="auth-pass">
-              Пароль
-            </label>
-            <input
-              id="auth-pass"
-              className="form-control mb-3"
-              type="password"
-              value={password}
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              placeholder="••••••••"
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+          <a className="yandex-btn" href={YANDEX_SIGN_IN_URL}>
+            <span className="yandex-btn__mark" aria-hidden="true">
+              Я
+            </span>
+            <span>Войти с Яндексом</span>
+          </a>
 
-            {error && <div className="alert alert-danger">{error}</div>}
-
-            <button
-              className="btn btn-primary btn-lg w-100"
-              type="submit"
-              disabled={busy || !username || !password}
-            >
-              {busy ? (
-                <>
-                  <span className="spinner" />
-                  Подождите…
-                </>
-              ) : mode === 'login' ? (
-                'Войти'
-              ) : (
-                'Зарегистрироваться'
-              )}
-            </button>
-          </form>
-
-          <div className="auth__switch">
-            {mode === 'login' ? (
-              <>
-                Нет аккаунта?{' '}
-                <button type="button" className="auth__link" onClick={() => switchMode('register')}>
-                  Зарегистрироваться
-                </button>
-              </>
-            ) : (
-              <>
-                Уже есть аккаунт?{' '}
-                <button type="button" className="auth__link" onClick={() => switchMode('login')}>
-                  Войти
-                </button>
-              </>
-            )}
-          </div>
+          <p className="auth__note">
+            Регистрация не нужна: при первом входе аккаунт создастся сам.
+          </p>
         </div>
       </div>
     </div>

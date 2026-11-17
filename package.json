@@ -1,8 +1,8 @@
 {
-  "name": "easyfood",
+  "name": "bitebalance",
   "version": "1.0.0",
   "private": true,
-  "description": "EasyFood — дневник питания с калориями, БЖУ, сканером штрихкодов и распознаванием блюд по фото",
+  "description": "BiteBalance — дневник питания с калориями, БЖУ, сканером штрихкодов и распознаванием блюд по фото",
   "type": "module",
   "workspaces": [
     "backend",
@@ -15,7 +15,8 @@
     "build": "npm -w web run build && npm -w backend run build",
     "start": "npm -w backend run start",
     "typecheck": "npm -w backend run typecheck && npm -w web run typecheck",
-    "fonts": "node web/scripts/fetch-fonts.mjs"
+    "fonts": "node web/scripts/fetch-fonts.mjs",
+    "vapid": "web-push generate-vapid-keys --json"
   },
   "devDependencies": {
     "concurrently": "^10.0.6"

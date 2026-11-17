@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
-import { fileToDataUrl, fileToImageBlob } from '../lib/image';
+import { fileToDataUrl } from '../lib/image';
 import { num } from '../lib/format';
 import type { MealId, Product, Recognition } from '../types';
 import {
@@ -108,8 +108,6 @@ export function ProductPicker({
     image: null as string | null,
     note: '',
     result: null as Recognition | null,
-    /** Ключ загруженной картинки в S3 — её надо удалить, когда она больше не нужна. */
-    key: null as string | null,
   });
   const [textState, setTextState] = useState({
     note: '',
@@ -120,27 +118,7 @@ export function ProductPicker({
   const [aiEnabled, setAiEnabled] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
-  /** Исходный файл — из него качаем blob для загрузки в S3. */
-  const photoFile = useRef<File | null>(null);
-  /** Ключ загруженной картинки — чтобы убрать её из бакета, когда она не нужна. */
-  const uploadKey = useRef<string | null>(null);
   const requestId = useRef(0);
-
-  /** Убирает картинку из бакета: после использования она больше не нужна. */
-  const dropUpload = (key: string | null) => {
-    if (!key) return;
-    void api.deleteUpload(key).catch(() => undefined);
-  };
-
-  // Пользователь закрыл шторку, не сохранив продукт: картинка всё равно
-  // не нужна — удаляем. Если он не дошёл до конца, заберёт чистка по суткам.
-  useEffect(
-    () => () => {
-      dropUpload(uploadKey.current);
-      uploadKey.current = null;
-    },
-    [],
-  );
 
   useEffect(() => {
     api
@@ -236,64 +214,21 @@ export function ProductPicker({
     setAiError(null);
     try {
       const image = await fileToDataUrl(file);
-      photoFile.current = file;
-      // Предыдущее фото больше не понадобится — убираем его из бакета.
-      dropUpload(uploadKey.current);
-      uploadKey.current = null;
-      setPhotoState((s) => ({ ...s, image, result: null, key: null }));
+      setPhotoState((s) => ({ ...s, image, result: null }));
     } catch {
       setAiError('Не удалось прочитать файл.');
     }
   };
 
-  /**
-   * Кладёт фото прямо в S3: сервер приложения байты картинки не видит.
-   * Если хранилище не настроено — возвращаем null, и фото уходит
-   * запасным путём через сервер.
-   */
-  const uploadToS3 = async (file: File): Promise<string | null> => {
-    const blob = await fileToImageBlob(file);
-    try {
-      const { key, uploadUrl, contentType } = await api.presignUpload({
-        contentType: 'image/jpeg',
-        size: blob.size,
-      });
-      const res = await fetch(uploadUrl, {
-        method: 'PUT',
-        body: blob,
-        headers: { 'Content-Type': contentType },
-      });
-      if (!res.ok) throw new Error(`UPLOAD_FAILED_${res.status}`);
-      return key;
-    } catch (err) {
-      // S3 не настроен — откатываемся на отправку через сервер.
-      if (err instanceof ApiError && err.status === 501) return null;
-      throw err;
-    }
-  };
-
+  /** Фото уходит в теле запроса как data URL — хранилища нет. */
   const recognizePhoto = async () => {
     const { image, note } = photoState;
     if (!image) return;
     setRecognizing(true);
     setAiError(null);
     try {
-      const file = photoFile.current;
-      const key = file ? await uploadToS3(file) : null;
-      if (key) {
-        try {
-          const result = await api.recognize({ key, note: note.trim() || undefined });
-          uploadKey.current = key;
-          setPhotoState((s) => ({ ...s, result, key }));
-        } catch (err) {
-          // Фото уже в бакете, но распознать не вышло — убираем мусор.
-          dropUpload(key);
-          throw err;
-        }
-      } else {
-        const result = await api.recognize({ image, note: note.trim() || undefined });
-        setPhotoState((s) => ({ ...s, result }));
-      }
+      const result = await api.recognize({ image, note: note.trim() || undefined });
+      setPhotoState((s) => ({ ...s, result }));
     } catch (err) {
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
@@ -330,12 +265,6 @@ export function ProductPicker({
       servingG: recognition.grams,
       source: 'ai',
     });
-    // Продукт создан — картинка больше не нужна, убираем её из бакета.
-    if (tab === 'photo') {
-      dropUpload(uploadKey.current);
-      uploadKey.current = null;
-      setPhotoState((s) => ({ ...s, key: null }));
-    }
     onPick({ ...product, servingG: recognition.grams });
   };
 
@@ -356,7 +285,7 @@ export function ProductPicker({
           {codeMiss && (
             <>
               <div className="alert alert-danger mt-3 mb-0">
-                Продукт со штрихкодом {codeMiss} не найден. Добавьте его в базу — останется вписать
+                Продукт со штрихкодом {codeMiss} не найден. Добавьте его в базу - останется вписать
                 название и КБЖУ.
               </div>
               <div className="modal-footer-sticky">

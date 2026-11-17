@@ -10,10 +10,11 @@ import { authHook } from './middleware/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { diaryRoutes } from './routes/diary.js';
 import { productRoutes } from './routes/products.js';
+import { pushRoutes } from './routes/push.js';
 import { recognizeRoutes } from './routes/recognize.js';
 import { settingsRoutes } from './routes/settings.js';
-import { uploadRoutes } from './routes/uploads.js';
-import { runRetention, cleanupUploads } from './services/maintenance.js';
+import { runRetention } from './services/maintenance.js';
+import { startPushScheduler } from './services/push.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const webDist = resolve(here, '../../web/dist');
@@ -58,7 +59,7 @@ await app.register(diaryRoutes);
 await app.register(productRoutes);
 await app.register(settingsRoutes);
 await app.register(recognizeRoutes);
-await app.register(uploadRoutes);
+await app.register(pushRoutes);
 
 // ---------- Статика SPA ----------
 if (existsSync(staticRoot)) {
@@ -86,25 +87,25 @@ async function start(): Promise<void> {
     process.exit(1);
   }
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  app.log.info(`EasyFood API on http://0.0.0.0:${config.port}`);
+  app.log.info(`BiteBalance API on http://0.0.0.0:${config.port}`);
 
-  // История дневника живёт 60 дней, а картинки в S3 — не больше суток.
-  // Чистим при старте, дальше этим занимается сервис maintenance.
+  // История дневника живёт 60 дней. Чистим при старте, дальше этим
+  // занимается сервис maintenance.
   void runRetention()
     .then((removed) => {
       if (removed) app.log.info(`retention: removed ${removed} entries`);
     })
     .catch((err) => app.log.error(err, 'retention cleanup failed'));
 
-  void cleanupUploads()
-    .then((removed) => {
-      if (removed) app.log.info(`uploads: removed ${removed} stale images`);
-    })
-    .catch((err) => app.log.error(err, 'uploads cleanup failed'));
+  // Напоминания в 7:00, 13:00, 17:00 и 20:30 МСК.
+  stopPush = startPushScheduler();
 }
+
+let stopPush: () => void = () => undefined;
 
 const shutdown = async (signal: string) => {
   app.log.info(`${signal} received, shutting down`);
+  stopPush();
   await app.close();
   await pool.end();
   process.exit(0);

@@ -26,10 +26,7 @@ export async function fileToImageBlob(
   });
 }
 
-/**
- * Запасной путь: фото уходит на сервер прямо в теле запроса.
- * Используется только когда S3 не настроен.
- */
+/** Фото уходит на сервер прямо в теле запроса как data URL (base64). */
 export async function fileToDataUrl(file: File, maxEdge = 1024, quality = 0.82): Promise<string> {
   const blob = await fileToImageBlob(file, maxEdge, quality);
   return new Promise((resolve, reject) => {

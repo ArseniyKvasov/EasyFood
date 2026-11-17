@@ -1,18 +1,18 @@
-name: easyfood
+name: bitebalance
 
 services:
   db:
     image: postgres:16-alpine
-    container_name: easyfood-db
+    container_name: bitebalance-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-easyfood}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-easyfood}
-      POSTGRES_DB: ${POSTGRES_DB:-easyfood}
+      POSTGRES_USER: ${POSTGRES_USER:-bitebalance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bitebalance}
+      POSTGRES_DB: ${POSTGRES_DB:-bitebalance}
     volumes:
-      - easyfood-db:/var/lib/postgresql/data
+      - db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-easyfood} -d ${POSTGRES_DB:-easyfood}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bitebalance} -d ${POSTGRES_DB:-bitebalance}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -22,8 +22,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: easyfood-app:latest
-    container_name: easyfood-app
+    image: bitebalance-app:latest
+    container_name: bitebalance-app
     restart: unless-stopped
     depends_on:
       db:
@@ -31,8 +31,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-easyfood}:${POSTGRES_PASSWORD:-easyfood}@db:5432/${POSTGRES_DB:-easyfood}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bitebalance}:${POSTGRES_PASSWORD:-bitebalance}@db:5432/${POSTGRES_DB:-bitebalance}
       CORS_ORIGIN: ${CORS_ORIGIN:-}
+      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+      YANDEX_REDIRECT_URI: ${YANDEX_REDIRECT_URI:-}
+      YANDEX_SCOPE: ${YANDEX_SCOPE:-login:email login:info login:avatar}
       OPEN_FOOD_FACTS_ENABLED: ${OPEN_FOOD_FACTS_ENABLED:-true}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
@@ -41,23 +45,15 @@ services:
       OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
       OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-}
       OPENAI_RESPONSE_FORMAT: ${OPENAI_RESPONSE_FORMAT:-json_object}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
       NUTRIAPIX_API_KEY: ${NUTRIAPIX_API_KEY:-}
       NUTRIAPIX_BASE_URL: ${NUTRIAPIX_BASE_URL:-https://nutriapix.ru/api/v1}
       NUTRIAPIX_MONTHLY_BUDGET: ${NUTRIAPIX_MONTHLY_BUDGET:-1000}
       NUTRIAPIX_BACKFILL_BUDGET: ${NUTRIAPIX_BACKFILL_BUDGET:-700}
       NUTRIAPIX_BACKFILL_BATCH: ${NUTRIAPIX_BACKFILL_BATCH:-2}
       NUTRIAPIX_BACKFILL_INTERVAL_HOURS: ${NUTRIAPIX_BACKFILL_INTERVAL_HOURS:-2}
-      S3_BUCKET: ${S3_BUCKET:-}
-      S3_LOCATION: ${S3_LOCATION:-uploads}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
-      S3_REGION_NAME: ${S3_REGION_NAME:-ru-central1}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
-      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
-      S3_QUERYSTRING_EXPIRE: ${S3_QUERYSTRING_EXPIRE:-900}
-      S3_BACKUP_LOCATION: ${S3_BACKUP_LOCATION:-backups}
-      S3_BACKUP_KEEP_DAYS: ${S3_BACKUP_KEEP_DAYS:-14}
-      S3_UPLOAD_KEEP_HOURS: ${S3_UPLOAD_KEEP_HOURS:-24}
       HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-60}
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:3000"
@@ -68,14 +64,14 @@ services:
       retries: 5
       start_period: 20s
 
-  # Обслуживание: бэкап базы в S3 и чистка истории дневника.
+  # Обслуживание: бэкап базы в локальную папку и чистка истории дневника.
   # Тот же образ, что и у приложения: правится в одном месте.
   maintenance:
     build:
       context: .
       dockerfile: Dockerfile
-    image: easyfood-app:latest
-    container_name: easyfood-maintenance
+    image: bitebalance-app:latest
+    container_name: bitebalance-maintenance
     restart: unless-stopped
     depends_on:
       db:
@@ -86,27 +82,26 @@ services:
       disable: true
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-easyfood}:${POSTGRES_PASSWORD:-easyfood}@db:5432/${POSTGRES_DB:-easyfood}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bitebalance}:${POSTGRES_PASSWORD:-bitebalance}@db:5432/${POSTGRES_DB:-bitebalance}
       NUTRIAPIX_API_KEY: ${NUTRIAPIX_API_KEY:-}
       NUTRIAPIX_BASE_URL: ${NUTRIAPIX_BASE_URL:-https://nutriapix.ru/api/v1}
       NUTRIAPIX_MONTHLY_BUDGET: ${NUTRIAPIX_MONTHLY_BUDGET:-1000}
       NUTRIAPIX_BACKFILL_BUDGET: ${NUTRIAPIX_BACKFILL_BUDGET:-700}
       NUTRIAPIX_BACKFILL_BATCH: ${NUTRIAPIX_BACKFILL_BATCH:-2}
       NUTRIAPIX_BACKFILL_INTERVAL_HOURS: ${NUTRIAPIX_BACKFILL_INTERVAL_HOURS:-2}
-      S3_BUCKET: ${S3_BUCKET:-}
-      S3_LOCATION: ${S3_LOCATION:-uploads}
-      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
-      S3_REGION_NAME: ${S3_REGION_NAME:-ru-central1}
-      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
-      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
-      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
-      S3_BACKUP_LOCATION: ${S3_BACKUP_LOCATION:-backups}
-      S3_BACKUP_KEEP_DAYS: ${S3_BACKUP_KEEP_DAYS:-14}
-      S3_UPLOAD_KEEP_HOURS: ${S3_UPLOAD_KEEP_HOURS:-24}
       HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-60}
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
       RETENTION_INTERVAL_HOURS: ${RETENTION_INTERVAL_HOURS:-6}
-      UPLOAD_CLEANUP_INTERVAL_HOURS: ${UPLOAD_CLEANUP_INTERVAL_HOURS:-1}
+      # Дампы кладутся в том — переживают пересоздание контейнера.
+      BACKUP_DIR: /app/data/backups
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - backups:/app/data/backups
 
+# Тома названы по-старому (easyfood_*) намеренно: переименование проекта
+# не должно создать пустую базу и потерять записи дневника.
 volumes:
-  easyfood-db:
+  db:
+    name: easyfood_easyfood-db
+  backups:
+    name: easyfood_easyfood-backups
