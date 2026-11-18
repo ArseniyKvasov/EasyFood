@@ -70,7 +70,7 @@ export const config = {
      */
     redirectUri: (process.env.YANDEX_REDIRECT_URI ?? '').trim(),
     /** Права, которые запрашиваем у Яндекс ID. Пусто — только id и логин. */
-    scope: (process.env.YANDEX_SCOPE ?? 'login:email login:info login:avatar').trim(),
+    scope: (process.env.YANDEX_SCOPE ?? 'login:info login:email').trim(),
     /** Базовые адреса API Яндекса: меняются только в тестах с mock-сервером. */
     oauthBaseUrl: (process.env.YANDEX_OAUTH_BASE_URL ?? 'https://oauth.yandex.ru').replace(/\/+$/, ''),
     loginBaseUrl: (process.env.YANDEX_LOGIN_BASE_URL ?? 'https://login.yandex.ru').replace(/\/+$/, ''),

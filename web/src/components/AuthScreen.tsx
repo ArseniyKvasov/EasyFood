@@ -33,23 +33,20 @@ export function AuthScreen({ error }: Props) {
           </div>
 
           <h1 className="auth__heading">Вход в дневник</h1>
-          <p className="hint mb-4">
-            Дневник питания привязан к аккаунту Яндекс ID - под ним хранятся ваши записи,
-            продукты и настройки.
-          </p>
 
           {message && <div className="alert alert-danger">{message}</div>}
 
           <a className="yandex-btn" href={YANDEX_SIGN_IN_URL}>
-            <span className="yandex-btn__mark" aria-hidden="true">
-              Я
-            </span>
+            <img
+              className="yandex-btn__logo"
+              src="/icons/yandex.svg"
+              width={24}
+              height={24}
+              alt=""
+              aria-hidden="true"
+            />
             <span>Войти с Яндексом</span>
           </a>
-
-          <p className="auth__note">
-            Регистрация не нужна: при первом входе аккаунт создастся сам.
-          </p>
         </div>
       </div>
     </div>

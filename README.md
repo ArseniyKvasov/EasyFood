@@ -81,17 +81,18 @@ docker compose down -v         # остановить и удалить данн
    `https://<домен>/api/auth/yandex/callback` (для локальной разработки —
    `http://localhost:3000/api/auth/yandex/callback` или адрес Vite, если
    прокси не настроен).
-3. В правах отметьте **«Доступ к адресу электронной почты»**, **«Доступ к логину,
-   имени и фамилии, полу»** и **«Доступ к портрету пользователя»** — из них
-   складывается профиль. Другой набор прав задаётся через `YANDEX_SCOPE`,
-   пустой `YANDEX_SCOPE` — только id и логин.
+3. В правах отметьте только **«Доступ к адресу электронной почты»** и
+   **«Доступ к логину, имени и фамилии, полу»** — этого хватает: имя, фамилия и
+   почта. Отдельного права на имя нет, оно идёт вместе с логином и полом.
+   Другой набор прав задаётся через `YANDEX_SCOPE`, пустой `YANDEX_SCOPE` —
+   только id и логин.
 4. Скопируйте ClientID и Client secret в `.env`:
 
 ```bash
 YANDEX_CLIENT_ID=...
 YANDEX_CLIENT_SECRET=...
 YANDEX_REDIRECT_URI=https://food.example.ru/api/auth/yandex/callback
-YANDEX_SCOPE=login:email login:info login:avatar
+YANDEX_SCOPE=login:info login:email
 ```
 
 `YANDEX_REDIRECT_URI` можно оставить пустым — тогда адрес собирается из
@@ -99,7 +100,7 @@ YANDEX_SCOPE=login:email login:info login:avatar
 явно: значение должно дословно совпадать с Redirect URI в приложении Яндекса.
 
 Аккаунт создаётся при первом входе: пользователь опознаётся по неизменяемому
-`id` Яндекса, а логин, имя и портрет обновляются при каждом входе. Сессия живёт
+`id` Яндекса, а имя, фамилия и почта обновляются при каждом входе. Сессия живёт
 30 дней, выход — кнопкой «Выйти из аккаунта» в настройках.
 
 Для автотестов адреса API Яндекса можно подменить на свой mock-сервер:
@@ -122,11 +123,12 @@ YANDEX_SCOPE=login:email login:info login:avatar
 |------------|---------------|------------|
 | `APP_PORT` | `8080` | Порт, на котором приложение доступно на хосте |
 | `APP_BIND` | `127.0.0.1` | Интерфейс: оставьте `127.0.0.1`, если сайт закрыт nginx'ом |
+| `SITE_URL` | пусто | Публичный адрес сайта; нужен `deploy/production.sh` для проверки после выкладки |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `bitebalance` | Доступ к базе |
 | `CORS_ORIGIN` | пусто | Разрешённые origins через запятую; пусто — CORS выключен |
 | `YANDEX_CLIENT_ID` / `YANDEX_CLIENT_SECRET` | пусто | Приложение Яндекс ID; без них войти нельзя |
 | `YANDEX_REDIRECT_URI` | пусто | Адрес возврата после входа; пусто — собирается из заголовков запроса |
-| `YANDEX_SCOPE` | `login:email login:info login:avatar` | Права, которые запрашиваем у Яндекс ID |
+| `YANDEX_SCOPE` | `login:info login:email` | Права, которые запрашиваем у Яндекс ID |
 | `OPEN_FOOD_FACTS_ENABLED` | `true` | Отключите, если сервер без интернета |
 | `OPENAI_API_KEY` | пусто | Ключ для распознавания блюд по фото (без него функция отключена) |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Любой OpenAI-совместимый endpoint |
@@ -190,9 +192,16 @@ npm run build
 ```bash
 git clone https://github.com/ArseniyKvasov/EasyFood.git   # репозиторий пока под старым именем
 cd EasyFood
-cp .env.example .env && nano .env     # задайте пароль БД
-docker compose up -d --build
+cp .env.example .env && nano .env     # пароль БД, SITE_URL, ключи Яндекса
+./deploy/production.sh
 ```
+
+Деплой идёт без простоя: приложение живёт в двух слотах (`app-blue` на
+`APP_PORT`, `app-green` на `APP_PORT_GREEN`). Скрипт поднимает свободный слот,
+проверяет его healthcheck, переключает nginx на его порт и только потом гасит
+старый - открытые запросы не обрываются. Если кандидат не поднялся, трафик
+остаётся на старом слоте. `./deploy/production.sh --check` проверяет окружение,
+ничего не меняя.
 
 Дальше — nginx как обратный прокси и сертификат Let's Encrypt
 (готовые конфиги лежат в [`deploy/nginx`](deploy/nginx)).

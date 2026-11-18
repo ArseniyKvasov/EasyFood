@@ -55,7 +55,7 @@ export async function destroySession(token: string): Promise<void> {
 }
 
 /**
- * Создаёт аккаунт по профилю Яндекса или обновляет имя и портрет,
+ * Создаёт аккаунт по профилю Яндекса или обновляет имя и почту,
  * если человек уже входил раньше. Возвращает id пользователя.
  */
 export async function upsertYandexUser(profile: YandexProfile): Promise<number> {

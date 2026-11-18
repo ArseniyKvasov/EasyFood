@@ -121,13 +121,17 @@ export async function fetchProfile(token: string): Promise<YandexProfile> {
   }
 
   const login = text(data?.login);
+  // Право login:info отдаёт имя и фамилию по отдельности - склеиваем их.
   const displayName =
-    text(data?.display_name) || text(data?.real_name) || text(data?.first_name) || login;
+    [text(data?.first_name), text(data?.last_name)].filter(Boolean).join(' ') ||
+    text(data?.display_name) ||
+    text(data?.real_name) ||
+    login;
 
   const emails = Array.isArray(data?.emails) ? data.emails : [];
   const email = text(data?.default_email) || text(emails[0]);
 
-  // Портрет отдаётся отдельным правом: без него is_avatar_empty = true.
+  // Портрет запрашивается только правом login:avatar: по умолчанию его нет.
   const avatarId = data?.is_avatar_empty === true ? '' : text(data?.default_avatar_id);
   const avatarUrl = avatarId ? `https://avatars.yandex.net/get-yapic/${avatarId}/islands-200` : '';
 

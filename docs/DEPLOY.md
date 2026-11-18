@@ -75,9 +75,14 @@ nano .env
 ```
 
 ```ini
-# Порт, который приложение занимает на хосте (nginx будет ходить на него)
+# Порты двух слотов: blue и green. Деплой поднимает свободный слот,
+# переключает nginx на него и только потом гасит старый.
 APP_PORT=8080
+APP_PORT_GREEN=8081
 APP_BIND=127.0.0.1
+
+# Публичный адрес сайта: по нему deploy/production.sh проверяет выкладку
+SITE_URL=https://food.fastclass.ru
 
 # Доступ к базе — задайте СВОЙ пароль
 POSTGRES_USER=bitebalance
@@ -91,7 +96,7 @@ CORS_ORIGIN=
 YANDEX_CLIENT_ID=
 YANDEX_CLIENT_SECRET=
 YANDEX_REDIRECT_URI=https://food.fastclass.ru/api/auth/yandex/callback
-YANDEX_SCOPE=login:email login:info login:avatar
+YANDEX_SCOPE=login:info login:email
 
 # Поиск по штрихкодам и названиям через Open Food Facts
 OPEN_FOOD_FACTS_ENABLED=true
@@ -116,15 +121,16 @@ OPENAI_RESPONSE_FORMAT=json_object
 2. **Redirect URI**: `https://food.fastclass.ru/api/auth/yandex/callback` —
    дословно этот адрес, включая схему и путь. Можно добавить второй адрес для
    локальной разработки: `http://localhost:3000/api/auth/yandex/callback`.
-3. Права: **«Доступ к адресу электронной почты»**, **«Доступ к логину, имени и
-   фамилии, полу»**, **«Доступ к портрету пользователя»**.
+3. Права: только **«Доступ к адресу электронной почты»** и **«Доступ к логину,
+   имени и фамилии, полу»**. Этого хватает: имя, фамилия и почта. Имя и фамилия
+   идут одним правом вместе с логином и полом, отдельного права на имя нет.
 4. ClientID и Client secret — в `.env`:
 
 ```bash
 YANDEX_CLIENT_ID=...
 YANDEX_CLIENT_SECRET=...
 YANDEX_REDIRECT_URI=https://food.fastclass.ru/api/auth/yandex/callback
-YANDEX_SCOPE=login:email login:info login:avatar
+YANDEX_SCOPE=login:info login:email
 ```
 
 `YANDEX_REDIRECT_URI` должен совпадать с настройкой приложения: при
@@ -283,10 +289,15 @@ Azure, Google Vertex, AWS Bedrock, Claude Platform on AWS); `reasoning`
 
 ## 4. Запуск
 
+Первый запуск - тем же скриптом, что и обновления:
+
 ```bash
-docker compose up -d --build
+./deploy/production.sh
 docker compose ps
 ```
+
+Скрипт соберёт образ, поднимет стек и дождётся healthcheck. Если базы ещё нет,
+он просто пропустит бэкап.
 
 Приложение поднимется на `127.0.0.1:8080`. Проверка:
 
@@ -413,12 +424,57 @@ Postgres наружу не открывается — он живёт во вн�
 
 ## 9. Обновление проекта
 
+Одна команда на сервере:
+
 ```bash
 cd /opt/EasyFood
-git pull
-docker compose up -d --build
-docker image prune -f
+./deploy/production.sh
 ```
+
+Деплой без простоя: приложение живёт в двух слотах - `app-blue` на `APP_PORT`
+и `app-green` на `APP_PORT_GREEN`. Пока один слот обслуживает трафик, второй
+собирается и проверяется.
+
+Что делает скрипт:
+
+1. читает `.env` (`SITE_URL`, порты, доступы) и проверяет docker/curl;
+2. обновляет код из git - рабочий каталог должен быть чистым;
+3. делает бэкап базы в `data/backups/predeploy-*.sql.gz` перед миграциями;
+4. собирает образ и помечает его коротким SHA коммита;
+5. поднимает свободный слот и ждёт его healthcheck на
+   `127.0.0.1:<порт слота>/api/health`;
+6. меняет порт приложения в конфиге nginx (`NGINX_SITE_FILE`) и делает
+   `nginx -s reload`;
+7. проверяет публичный `$SITE_URL/api/health`; если не ответил - возвращает
+   nginx на старый порт и гасит кандидата;
+8. гасит старый слот, обновляет `maintenance` и пишет
+   `.runtime/deploy/active-slot`;
+9. чистит старые образы, оставляя три последних релиза.
+
+Если кандидат не прошёл healthcheck, он просто останавливается: трафик
+продолжает идти на старый слот, nginx не трогается. Nginx получает reload,
+поэтому уже открытые соединения дорабатывают на старом слоте.
+
+### Слоты и nginx
+
+- `APP_PORT` - порт слота blue, `APP_PORT_GREEN` - слота green; они не должны
+  совпадать.
+- Скрипт сам меняет `127.0.0.1:<порт>` в установленном конфиге nginx
+  (`/etc/nginx/sites-available/<домен>`, можно переопределить через
+  `NGINX_SITE_FILE`). Не перезаписывайте этот конфиг вручную из репозитория
+  после деплоя - вернётся старый порт.
+- Какой слот активен, видно в `.runtime/deploy/active-slot` и по порту в
+  конфиге nginx.
+
+Опции: `--no-pull` (выложить текущий код), `--no-backup`, `--no-prune`,
+`--check` (только проверка окружения, ничего не меняется).
+
+```bash
+./deploy/production.sh --check
+```
+
+Ручной `docker compose up -d` поднимает оба слота сразу и перезапускает
+активный, поэтому для выкладки используйте скрипт.
 
 Миграции применяются автоматически при старте контейнера (`backend/src/migrations.ts`).
 
@@ -441,12 +497,17 @@ docker image prune -f
    cd /opt/EasyFood && docker compose down
    ```
 
-2. Обновите код и поднимите стек под новым именем:
+2. Поднимите стек под новым именем - скрипт сам сделает `git pull`, сборку и
+   healthcheck:
 
    ```bash
-   git pull
-   docker compose up -d --build
+   ./deploy/production.sh
    ```
+
+   Первый запуск собирает образ, поэтому сайт будет недоступен несколько
+   минут. Дальше деплой идёт без простоя. Пока контейнеры старого стека
+   (`easyfood-*`) запущены, скрипт откажется работать: два Postgres на одном
+   томе повредят базу.
 
 3. Войдите заново: куки переименованы (`ef_session` → `bb_session`,
    `ef_oauth` → `bb_oauth`), старые сессии больше не действуют.

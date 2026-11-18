@@ -10,5 +10,7 @@ dist
 README.md
 docs
 deploy
+data
+.runtime
 .vscode
 .idea

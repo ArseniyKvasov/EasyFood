@@ -8,3 +8,5 @@ coverage/
 .DS_Store
 data/
 .vite/
+# Блокировка деплоя и прочие рабочие файлы сервера
+.runtime/

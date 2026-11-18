@@ -1,5 +1,50 @@
 name: bitebalance
 
+# Общие настройки обоих слотов приложения: они отличаются только именем
+# контейнера и портом на хосте.
+x-app: &app
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: bitebalance-app:latest
+  restart: unless-stopped
+  depends_on:
+    db:
+      condition: service_healthy
+  environment:
+    NODE_ENV: production
+    PORT: 3000
+    DATABASE_URL: postgresql://${POSTGRES_USER:-bitebalance}:${POSTGRES_PASSWORD:-bitebalance}@db:5432/${POSTGRES_DB:-bitebalance}
+    CORS_ORIGIN: ${CORS_ORIGIN:-}
+    YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
+    YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
+    YANDEX_REDIRECT_URI: ${YANDEX_REDIRECT_URI:-}
+    YANDEX_SCOPE: ${YANDEX_SCOPE:-login:info login:email}
+    OPEN_FOOD_FACTS_ENABLED: ${OPEN_FOOD_FACTS_ENABLED:-true}
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+    OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
+    OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
+    OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-}
+    OPENAI_RESPONSE_FORMAT: ${OPENAI_RESPONSE_FORMAT:-json_object}
+    VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+    VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+    VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
+    NUTRIAPIX_API_KEY: ${NUTRIAPIX_API_KEY:-}
+    NUTRIAPIX_BASE_URL: ${NUTRIAPIX_BASE_URL:-https://nutriapix.ru/api/v1}
+    NUTRIAPIX_MONTHLY_BUDGET: ${NUTRIAPIX_MONTHLY_BUDGET:-1000}
+    NUTRIAPIX_BACKFILL_BUDGET: ${NUTRIAPIX_BACKFILL_BUDGET:-700}
+    NUTRIAPIX_BACKFILL_BATCH: ${NUTRIAPIX_BACKFILL_BATCH:-2}
+    NUTRIAPIX_BACKFILL_INTERVAL_HOURS: ${NUTRIAPIX_BACKFILL_INTERVAL_HOURS:-2}
+    HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-60}
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
+
 services:
   db:
     image: postgres:16-alpine
@@ -18,51 +63,19 @@ services:
       retries: 20
       start_period: 10s
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: bitebalance-app:latest
-    container_name: bitebalance-app
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      NODE_ENV: production
-      PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-bitebalance}:${POSTGRES_PASSWORD:-bitebalance}@db:5432/${POSTGRES_DB:-bitebalance}
-      CORS_ORIGIN: ${CORS_ORIGIN:-}
-      YANDEX_CLIENT_ID: ${YANDEX_CLIENT_ID:-}
-      YANDEX_CLIENT_SECRET: ${YANDEX_CLIENT_SECRET:-}
-      YANDEX_REDIRECT_URI: ${YANDEX_REDIRECT_URI:-}
-      YANDEX_SCOPE: ${YANDEX_SCOPE:-login:email login:info login:avatar}
-      OPEN_FOOD_FACTS_ENABLED: ${OPEN_FOOD_FACTS_ENABLED:-true}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
-      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
-      OPENAI_TEMPERATURE: ${OPENAI_TEMPERATURE:-0.2}
-      OPENAI_MAX_TOKENS: ${OPENAI_MAX_TOKENS:-}
-      OPENAI_RESPONSE_FORMAT: ${OPENAI_RESPONSE_FORMAT:-json_object}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@example.com}
-      NUTRIAPIX_API_KEY: ${NUTRIAPIX_API_KEY:-}
-      NUTRIAPIX_BASE_URL: ${NUTRIAPIX_BASE_URL:-https://nutriapix.ru/api/v1}
-      NUTRIAPIX_MONTHLY_BUDGET: ${NUTRIAPIX_MONTHLY_BUDGET:-1000}
-      NUTRIAPIX_BACKFILL_BUDGET: ${NUTRIAPIX_BACKFILL_BUDGET:-700}
-      NUTRIAPIX_BACKFILL_BATCH: ${NUTRIAPIX_BACKFILL_BATCH:-2}
-      NUTRIAPIX_BACKFILL_INTERVAL_HOURS: ${NUTRIAPIX_BACKFILL_INTERVAL_HOURS:-2}
-      HISTORY_RETENTION_DAYS: ${HISTORY_RETENTION_DAYS:-60}
+  # Два слота: деплой поднимает свободный, проверяет его и только потом
+  # переключает nginx на его порт. Старый слот продолжает отвечать до этого.
+  app-blue:
+    <<: *app
+    container_name: bitebalance-app-blue
     ports:
       - "${APP_BIND:-127.0.0.1}:${APP_PORT:-8080}:3000"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+
+  app-green:
+    <<: *app
+    container_name: bitebalance-app-green
+    ports:
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT_GREEN:-8081}:3000"
 
   # Обслуживание: бэкап базы в локальную папку и чистка истории дневника.
   # Тот же образ, что и у приложения: правится в одном месте.
