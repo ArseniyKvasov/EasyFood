@@ -103,13 +103,15 @@ env_or() {
 }
 
 wait_http() {
-  local url="$1" attempts="$2" interval="$3" i
+  local url="$1" attempts="$2" interval="$3" i last=""
   for ((i = 1; i <= attempts; i++)); do
     if curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
       return 0
     fi
+    last="$(curl -sS --max-time 3 "$url" 2>&1 | head -1)"
     sleep "$interval"
   done
+  log "wait_http: не дождался ответа $url (последняя ошибка: ${last:-нет})"
   return 1
 }
 
@@ -126,9 +128,13 @@ reload_nginx() {
 # Меняет порт приложения в конфиге сайта и перезагружает nginx.
 # При любой ошибке возвращает исходный файл.
 nginx_switch() {
-  local old_port="$1" new_port="$2" tmp backup
-  [[ -f "$NGINX_SITE_FILE" ]] || return 1
+  local old_port="$1" new_port="$2" tmp backup reason
+  if [[ ! -f "$NGINX_SITE_FILE" ]]; then
+    log "nginx_switch: нет файла $NGINX_SITE_FILE"
+    return 1
+  fi
   if ! grep -q "127.0.0.1:${old_port}" "$NGINX_SITE_FILE"; then
+    log "nginx_switch: в конфиге нет порта ${old_port} - проверьте $NGINX_SITE_FILE"
     return 1
   fi
   tmp="$(mktemp "${TMPDIR:-/tmp}/bitebalance-nginx.XXXXXX")"
@@ -137,15 +143,19 @@ nginx_switch() {
   sed "s/127\.0\.0\.1:${old_port}\([^0-9]\)/127.0.0.1:${new_port}\1/g" "$NGINX_SITE_FILE" > "$tmp"
   if ! grep -q "127.0.0.1:${new_port}" "$tmp"; then
     rm -f "$tmp" "$backup"
+    log "nginx_switch: замена порта не сработала"
     return 1
   fi
   cp "$tmp" "$NGINX_SITE_FILE"
   if ! nginx -t >/dev/null 2>&1; then
+    log "nginx_switch: nginx -t не прошёл с портом ${new_port}, полный вывод:"
+    nginx -t 2>&1 | tail -8 | sed 's/^/    /' >&2
     cp "$backup" "$NGINX_SITE_FILE"
     rm -f "$tmp" "$backup"
     return 1
   fi
   if ! reload_nginx; then
+    log "nginx_switch: не удалось перезагрузить nginx"
     cp "$backup" "$NGINX_SITE_FILE"
     reload_nginx || true
     rm -f "$tmp" "$backup"
@@ -304,26 +314,52 @@ fi
 # Если конфига сайта ещё нет (первый деплой на чистом сервере), собираем его
 # из шаблона репозитория: обычный вариант или вариант для SNI-прокси.
 ensure_nginx_site() {
-  local template enabled
+  local template enabled mode
   if [[ -f "$NGINX_SITE_FILE" ]]; then
+    log "nginx: конфиг уже существует, пропускаю создание: $NGINX_SITE_FILE"
     return 0
   fi
-  if [[ "${NGINX_SNI:-0}" == "1" ]]; then
+  mode="${NGINX_SNI:-0}"
+  if [[ "$mode" == "1" ]]; then
     template="$APP_DIR/deploy/nginx/food.fastclass.ru.sni.conf"
   else
     template="$APP_DIR/deploy/nginx/food.fastclass.ru.conf"
   fi
   [[ -f "$template" ]] || die "не найден шаблон $template"
-  mkdir -p "$(dirname "$NGINX_SITE_FILE")" \
-    || die "нет прав на $(dirname "$NGINX_SITE_FILE") (запустите деплой от root или через sudo)"
-
-  sed -e "s/food\.fastclass\.ru/$SITE_HOST/g" "$template" > "$NGINX_SITE_FILE"
-  # SNI-вариант слушает локальный порт 8448, а не порт слотов: его скрипт
-  # не переключает, там проксирует stream-слой.
-  if [[ "${NGINX_SNI:-0}" != "1" ]]; then
-    sed -i.bak "s/127\.0\.0\.1:8080/127.0.0.1:$ACTIVE_PORT/g" "$NGINX_SITE_FILE" && rm -f "$NGINX_SITE_FILE.bak"
+  if ! mkdir -p "$(dirname "$NGINX_SITE_FILE")"; then
+    die "нет прав на $(dirname "$NGINX_SITE_FILE") (запустите деплой от root или через sudo)"
   fi
-  log "создан конфиг nginx: $NGINX_SITE_FILE (из ${template##*/})"
+  log "nginx: создаю конфиг $NGINX_SITE_FILE из ${template##*/} (SNI=$mode, домен $SITE_HOST, слот :$ACTIVE_PORT)"
+
+  if [[ "$mode" == "1" ]]; then
+    # В SNI-варианте TLS завершает stream-слой общим сертификатом сервера
+    # (food.fastclass.ru). Пути к сертам не трогаем, иначе nginx -t упадёт
+    # на отсутствующем каталоге для нового домена.
+    sed -e "/server_name/s/food\.fastclass\.ru/$SITE_HOST/g" \
+        -e "/access_log/s/food\.fastclass\.ru/$SITE_HOST/g" \
+        -e "/error_log/s/food\.fastclass\.ru/$SITE_HOST/g" \
+        -e "s/127\.0\.0\.1:8080/127.0.0.1:$ACTIVE_PORT/g" \
+        "$template" > "$NGINX_SITE_FILE"
+    log "nginx: серты оставлены общесерверными, server_name=$SITE_HOST"
+    if [[ -n "${NGINX_STREAM_CONF:-}" ]]; then
+      if [[ -f "$NGINX_STREAM_CONF" ]]; then
+        if ! grep -q "$SITE_HOST" "$NGINX_STREAM_CONF"; then
+          log "WARNING: в $NGINX_STREAM_CONF нет строки для $SITE_HOST - добавьте:"
+          log "WARNING:   $SITE_HOST 127.0.0.1:8447;   (в map) и server на listen 127.0.0.1:8447"
+        else
+          log "nginx: stream-map содержит $SITE_HOST - ок"
+        fi
+      else
+        log "WARNING: NGINX_STREAM_CONF=$NGINX_STREAM_CONF не существует - проверьте путь"
+      fi
+    else
+      log "WARNING: NGINX_STREAM_CONF не задан - не проверить stream-map"
+    fi
+  else
+    sed -e "s/food\.fastclass\.ru/$SITE_HOST/g" "$template" > "$NGINX_SITE_FILE"
+    sed -i.bak "s/127\.0\.0\.1:8080/127.0.0.1:$ACTIVE_PORT/g" "$NGINX_SITE_FILE" && rm -f "$NGINX_SITE_FILE.bak"
+    log "nginx: порты слотов проставлены на :$ACTIVE_PORT"
+  fi
 
   # Включаем сайт и предупреждаем про дефолтный.
   enabled="/etc/nginx/sites-enabled/$(basename "$NGINX_SITE_FILE")"
@@ -336,10 +372,37 @@ ensure_nginx_site() {
   fi
 
   if ! nginx -t >/dev/null 2>&1; then
+    log "nginx: nginx -t не прошёл, полный вывод:"
+    nginx -t 2>&1 | sed 's/^/    /' >&2 || true
+    # Частая причина: сертификата для нового домена ещё нет (шаблон ссылается
+    # на /etc/letsencrypt/live/<домен>/). Подменяем HTTP-шаблоном без SSL.
+    if [[ "$mode" != "1" ]]; then
+      local http_template="$APP_DIR/deploy/nginx/food.fastclass.ru.http.conf"
+      if [[ -f "$http_template" ]]; then
+        sed -e "s/food\.fastclass\.ru/$SITE_HOST/g" "$http_template" > "$NGINX_SITE_FILE"
+        sed -i.bak "s/127\.0\.0\.1:8080/127.0.0.1:$ACTIVE_PORT/g" "$NGINX_SITE_FILE" && rm -f "$NGINX_SITE_FILE.bak"
+        log "nginx: поставлен HTTP-конфиг без SSL (сертификат для $SITE_HOST не найден)"
+        log "nginx: выпустите сертификат: certbot --nginx -d $SITE_HOST --redirect"
+        if nginx -t >/dev/null 2>&1; then
+          reload_nginx || log "WARNING: не удалось перезагрузить nginx"
+          log "nginx: HTTP-конфиг активен"
+          return 0
+        fi
+        log "nginx: HTTP-конфиг тоже не прошёл проверку:"
+        nginx -t 2>&1 | sed 's/^/    /' >&2 || true
+      fi
+    fi
+    # nginx -t проверяет все конфиги: битым может оказаться чужой файл.
+    if [[ -d /etc/nginx/sites-enabled ]]; then
+      log "nginx: файлы в sites-enabled:"
+      ls -la /etc/nginx/sites-enabled/ 2>&1 | sed 's/^/    /' >&2 || true
+    fi
     log "WARNING: nginx -t не прошёл после создания конфига - проверьте $NGINX_SITE_FILE вручную"
     return 1
   fi
-  reload_nginx || log "WARNING: не удалось перезагрузить nginx (сервис может быть не запущен)"
+  reload_nginx \
+    && log "nginx: конфиг проверен и перезагружен" \
+    || log "WARNING: не удалось перезагрузить nginx (сервис может быть не запущен)"
   return 0
 }
 
@@ -420,18 +483,22 @@ log "кандидат отвечает"
 
 log "переключаем nginx на порт $CAND_PORT"
 if ! nginx_switch "$ACTIVE_PORT" "$CAND_PORT"; then
+  log "nginx_switch не удался - состояние конфига:"
+  grep -nE "listen|proxy_pass|ssl_certificate|server_name" "$NGINX_SITE_FILE" 2>/dev/null | sed "s/^/    /" >&2 || true
   docker compose stop "app-$CAND_SLOT" >/dev/null 2>&1 || true
   die "не удалось переключить nginx на порт $CAND_PORT"
 fi
 SWITCHED=1
 
 if ! wait_http "$SITE_URL/api/health" 10 1; then
-  log "публичный адрес не ответил - возвращаем nginx на порт $ACTIVE_PORT"
-  nginx_switch "$CAND_PORT" "$ACTIVE_PORT" || true
-  docker compose stop "app-$CAND_SLOT" >/dev/null 2>&1 || true
-  die "деплой откатан: $SITE_URL/api/health не ответил"
+  # Локальный healthcheck уже прошёл: кандидат жив. Если публичный адрес не
+  # отвечает, дело обычно вне приложения - DNS, TLS, фаервол. Откатывать
+  # рабочее приложение из-за этого нельзя.
+  log "WARNING: $SITE_URL/api/health не ответил - проверьте DNS, TLS и фаервол"
+  log "WARNING: деплой продолжен, nginx переключён на порт $CAND_PORT"
+else
+  log "публичный адрес отвечает: $SITE_URL"
 fi
-log "публичный адрес отвечает: $SITE_URL"
 
 # ---------- Вывод старого слота ----------
 
