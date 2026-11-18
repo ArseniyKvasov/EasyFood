@@ -35,6 +35,7 @@ CHECK=0
 DEPLOY_DONE=0
 CAND_STARTED=0
 SWITCHED=0
+NGINX_NEEDS_CREATE=0
 
 log() { printf '[%s] %s\n' "$(date '+%H:%M:%S')" "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -258,9 +259,9 @@ fi
 
 if [[ ! -f "$NGINX_SITE_FILE" ]]; then
   if ((CHECK)); then
-    log "WARNING: не найден $NGINX_SITE_FILE - переключение слотов не проверить"
+    log "WARNING: не найден $NGINX_SITE_FILE - при деплое будет создан из шаблона"
   else
-    die "не найден конфиг nginx $NGINX_SITE_FILE (задайте NGINX_SITE_FILE)"
+    NGINX_NEEDS_CREATE=1
   fi
 fi
 
@@ -297,6 +298,50 @@ if ((CHECK)); then
   log "режим --check: ничего не меняю"
   exit 0
 fi
+
+# ---------- Конфиг nginx ----------
+
+# Если конфига сайта ещё нет (первый деплой на чистом сервере), собираем его
+# из шаблона репозитория: обычный вариант или вариант для SNI-прокси.
+ensure_nginx_site() {
+  local template enabled
+  if [[ -f "$NGINX_SITE_FILE" ]]; then
+    return 0
+  fi
+  if [[ "${NGINX_SNI:-0}" == "1" ]]; then
+    template="$APP_DIR/deploy/nginx/food.fastclass.ru.sni.conf"
+  else
+    template="$APP_DIR/deploy/nginx/food.fastclass.ru.conf"
+  fi
+  [[ -f "$template" ]] || die "не найден шаблон $template"
+  mkdir -p "$(dirname "$NGINX_SITE_FILE")" \
+    || die "нет прав на $(dirname "$NGINX_SITE_FILE") (запустите деплой от root или через sudo)"
+
+  sed -e "s/food\.fastclass\.ru/$SITE_HOST/g" "$template" > "$NGINX_SITE_FILE"
+  # SNI-вариант слушает локальный порт 8448, а не порт слотов: его скрипт
+  # не переключает, там проксирует stream-слой.
+  if [[ "${NGINX_SNI:-0}" != "1" ]]; then
+    sed -i.bak "s/127\.0\.0\.1:8080/127.0.0.1:$ACTIVE_PORT/g" "$NGINX_SITE_FILE" && rm -f "$NGINX_SITE_FILE.bak"
+  fi
+  log "создан конфиг nginx: $NGINX_SITE_FILE (из ${template##*/})"
+
+  # Включаем сайт и предупреждаем про дефолтный.
+  enabled="/etc/nginx/sites-enabled/$(basename "$NGINX_SITE_FILE")"
+  if [[ -d /etc/nginx/sites-enabled && ! -e "$enabled" ]]; then
+    ln -sf "$NGINX_SITE_FILE" "$enabled" \
+      || log "WARNING: не удалось включить сайт: ln -sf $NGINX_SITE_FILE $enabled"
+    if [[ -e /etc/nginx/sites-enabled/default ]]; then
+      log "WARNING: в sites-enabled есть default - проверьте, что он не перехватывает домен"
+    fi
+  fi
+
+  if ! nginx -t >/dev/null 2>&1; then
+    log "WARNING: nginx -t не прошёл после создания конфига - проверьте $NGINX_SITE_FILE вручную"
+    return 1
+  fi
+  reload_nginx || log "WARNING: не удалось перезагрузить nginx (сервис может быть не запущен)"
+  return 0
+}
 
 # ---------- Код ----------
 
@@ -340,6 +385,10 @@ fi
 
 detect_active
 log "активный слот: $ACTIVE_SLOT (:$ACTIVE_PORT), кандидат: $CAND_SLOT (:$CAND_PORT)"
+
+if [[ "${NGINX_NEEDS_CREATE:-0}" == "1" ]]; then
+  ensure_nginx_site || log "WARNING: конфиг nginx не создан - трафик переключать не на что"
+fi
 
 log "проверяем базу"
 docker compose up -d --no-deps db >/dev/null
