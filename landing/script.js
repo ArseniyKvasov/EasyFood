@@ -437,10 +437,14 @@
   var banner = document.getElementById('consent');
   var stored = null;
   try { stored = localStorage.getItem('bb_consent'); } catch (e) {}
-  if (banner && !stored) banner.hidden = false;
+  if (banner && !stored) {
+    banner.hidden = false;
+    document.body.classList.add('has-consent');
+  }
   function decide(value) {
     if (window.bbConsent) window.bbConsent(value);
     if (banner) banner.hidden = true;
+    document.body.classList.remove('has-consent');
     track('consent_' + value);
   }
   var allBtn = document.getElementById('consentAll');

@@ -61,6 +61,13 @@
 }
 </script>
 <script src="config.js"></script>
+<style id="consent-critical">
+  /* Дублирует позиционирование из styles.css: баннер должен стоять внизу,
+     даже если стили не загрузились или в кэше старая версия. */
+  .consent{position:fixed;left:16px;right:16px;bottom:16px;z-index:9999}
+  .consent[hidden]{display:none}
+
+</style>
 <link rel="stylesheet" href="styles.css">
 <noscript><style>.reveal{opacity:1;transform:none;filter:none}.h1 .line>span{transform:none}.phone{opacity:1;transform:none}.mark__stroke path{stroke-dashoffset:0}.cal__day{opacity:1;transform:none}.app__card,.app__meal,.float-card,.float-pill{opacity:1;transform:none}.macro__bar{width:var(--w)}.ring__fill{stroke-dashoffset:218}</style></noscript>
 </head>

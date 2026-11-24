@@ -460,6 +460,8 @@ body.is-loaded .float-pill{opacity:1;transform:none}
   animation:cardUp .5s var(--ease) both;
 }
 .consent[hidden]{display:none}
+/* Пока висит вопрос про cookie, нижнюю кнопку не показываем */
+.has-consent .mobilebar{display:none}
 .consent p{margin:0;max-width:560px;font-size:.86rem;line-height:1.5;color:var(--ink-2)}
 .consent p a{text-decoration:underline}
 .consent__actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -521,7 +523,7 @@ section[id],[id="top"]{scroll-margin-top:92px}
   .hero__grid{gap:44px}
   .strip{grid-template-columns:1fr 1fr;row-gap:24px}
   .mobilebar{display:block}
-  .consent{bottom:84px;padding:14px}
+  .consent{padding:14px}
   .consent p{font-size:.8rem}
   .footer{padding-bottom:96px}
 }

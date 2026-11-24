@@ -1,5 +1,5 @@
 /* BiteBalance: кэш статики для установки и офлайна */
-const CACHE = 'bb-v1';
+const CACHE = 'bb-v2';
 const ASSETS = [
   '/', '/index.html', '/styles.css', '/script.js', '/analytics.js', '/config.js',
   '/gate.js', '/favicon.svg', '/assets/icon-192.png', '/assets/icon-512.png', '/manifest.webmanifest'
@@ -32,6 +32,19 @@ self.addEventListener('fetch', (e) => {
         caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
         return res;
       }).catch(() => caches.match(req).then((hit) => hit || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // Стили и скрипты тянем из сети: иначе после обновления сайта
+  // у вернувшихся посетителей остаётся старая вёрстка.
+  if (/\.(css|js)$/.test(path)) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match(req))
     );
     return;
   }
