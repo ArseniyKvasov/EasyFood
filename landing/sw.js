@@ -2,7 +2,7 @@
 const CACHE = 'bb-v1';
 const ASSETS = [
   '/', '/index.html', '/styles.css', '/script.js', '/analytics.js', '/config.js',
-  '/favicon.svg', '/assets/icon-192.png', '/assets/icon-512.png', '/manifest.webmanifest'
+  '/gate.js', '/favicon.svg', '/assets/icon-192.png', '/assets/icon-512.png', '/manifest.webmanifest'
 ];
 
 self.addEventListener('install', (e) => {
