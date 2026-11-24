@@ -59,6 +59,14 @@ const initialAuthError = (() => {
   return code;
 })();
 
+/**
+ * Метка последнего перехода на лендинг. Нужна, чтобы не попасть в цикл:
+ * если по адресу лендинга на самом деле отдаётся это же приложение
+ * (например, nginx ещё не переключён), редирект вернётся обратно.
+ */
+const LANDING_REDIRECT_KEY = 'bb_landing_redirect_at';
+const REDIRECT_GUARD_MS = 8000;
+
 const MEAL_NAMES: Record<MealId, string> = {
   breakfast: 'Завтрак',
   lunch: 'Обед',
@@ -113,10 +121,25 @@ export default function App() {
     }
   }, []);
 
+  // Недавно уже уходили на лендинг: второй раз подряд не отправляем.
+  const redirectTooSoon = useMemo(() => {
+    try {
+      const last = Number(sessionStorage.getItem(LANDING_REDIRECT_KEY) || 0);
+      return Date.now() - last < REDIRECT_GUARD_MS;
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
-    if (!authChecked || user || authError || landingIsCurrentPage) return;
+    if (!authChecked || user || authError || landingIsCurrentPage || redirectTooSoon) return;
+    try {
+      sessionStorage.setItem(LANDING_REDIRECT_KEY, String(Date.now()));
+    } catch {
+      /* приватный режим — обойдёмся без метки */
+    }
     window.location.replace(LANDING_URL);
-  }, [authChecked, user, authError, landingIsCurrentPage]);
+  }, [authChecked, user, authError, landingIsCurrentPage, redirectTooSoon]);
 
   // Разрешение на уведомления спрашиваем при каждом открытии страницы,
   // пока браузер его не запомнил.
@@ -521,7 +544,7 @@ export default function App() {
   if (!user) {
     // Ошибку входа показываем на месте: человек должен понять, что случилось,
     // и повторить попытку. Во всех остальных случаях уходим на лендинг.
-    if (authError || landingIsCurrentPage) {
+    if (authError || landingIsCurrentPage || redirectTooSoon) {
       return <AuthScreen error={authError} />;
     }
     return (
