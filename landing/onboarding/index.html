@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="description" content="Интерактивный прототип онбординга BiteBalance: норма, первый приём пищи, подписка Plus.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BiteBalance - онбординг</title>
+<meta name="theme-color" content="#FAF6EF">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<h1 class="sr-only">BiteBalance: дневник питания с распознаванием блюд по фото</h1>
+
+<div class="stage">
+  <div class="topbar">
+    <span class="brand"><img src="../favicon.svg" alt="" width="22" height="22">BiteBalance<span class="brand__dot"></span><span class="brand__sub">онбординг</span></span>
+    <button class="reset" id="resetBtn" type="button">Заново</button>
+  </div>
+
+  <div class="phone">
+    <div class="screen" id="screen">
+
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="statusbar__right">
+          <i class="sb-signal"></i><i class="sb-wifi"></i><i class="sb-batt"></i>
+        </span>
+      </div>
+
+      <div class="app">
+        <header class="app-head">
+          <button class="chev" type="button" aria-label="Предыдущий день">&#8249;</button>
+          <div class="date"><b>Сегодня</b><span>ВТ · 17 ноя</span></div>
+          <button class="iconbtn" id="settingsBtn" type="button" aria-label="Настройки">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.3"/><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.2 5.2l1.9 1.9M16.9 16.9l1.9 1.9M18.8 5.2l-1.9 1.9M7.1 16.9l-1.9 1.9"/></svg>
+          </button>
+        </header>
+
+        <div class="content" id="content">
+          <section class="ringcard">
+            <div class="ringcard__label">Калории</div>
+            <span class="planbadge" id="planBadge" hidden>Plus</span>
+            <div class="ring">
+              <svg viewBox="0 0 160 160" aria-hidden="true">
+                <defs>
+                  <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#3EA97A"/>
+                    <stop offset="1" stop-color="#1F6B49"/>
+                  </linearGradient>
+                </defs>
+                <circle class="ring__track" cx="80" cy="80" r="70"/>
+                <circle class="ring__fill" id="ringFill" cx="80" cy="80" r="70"/>
+              </svg>
+              <div class="ring__center">
+                <b id="kcalVal">0</b>
+                <span id="kcalSub">из 2 100 ккал</span>
+              </div>
+            </div>
+            <div class="macros" id="macros"></div>
+          </section>
+
+          <div id="meals"></div>
+
+          <button class="normlink" id="normLink" type="button">Настроить норму</button>
+        </div>
+      </div>
+
+      <div class="sheet-layer" id="sheetLayer" aria-hidden="true">
+        <div class="scrim" id="scrim"></div>
+        <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Настройка нормы">
+          <div class="grabber"></div>
+
+          <div class="sheet-head">
+            <button class="back" id="backBtn" type="button" aria-label="Назад">&#8249;</button>
+            <div class="dots" id="dots"><i></i><i></i><i></i></div>
+          </div>
+
+          <div class="sheet-body">
+            <section class="step is-active" data-step="1">
+              <h2>Какая у вас цель?</h2>
+              <p class="sub">От этого зависит норма и тон подсказок</p>
+              <div class="goals" id="goals">
+                <button class="goal" type="button" data-goal="lose">
+                  <span class="goal__ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span class="goal__txt"><b>Похудеть</b><span>мягкий дефицит, минус 15%</span></span>
+                </button>
+                <button class="goal" type="button" data-goal="keep">
+                  <span class="goal__ico"><svg viewBox="0 0 24 24"><path d="M4 12h16M9 7l-5 5 5 5M15 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span class="goal__txt"><b>Держать вес</b><span>норма без поправок</span></span>
+                </button>
+                <button class="goal" type="button" data-goal="gain">
+                  <span class="goal__ico"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  <span class="goal__txt"><b>Набрать</b><span>профицит, плюс 10%</span></span>
+                </button>
+              </div>
+            </section>
+
+            <section class="step" data-step="2">
+              <h2>Пара цифр для нормы</h2>
+              <p class="sub">Нужны один раз. Всё можно поменять в настройках</p>
+
+              <div class="field field--seg">
+                <span class="label">Пол</span>
+                <div class="seg" id="sexSeg">
+                  <button type="button" data-sex="f" class="is-on">Женский</button>
+                  <button type="button" data-sex="m">Мужской</button>
+                </div>
+              </div>
+
+              <div class="row2">
+                <label class="field"><span class="label">Возраст</span><input id="age" type="number" inputmode="numeric" value="29" min="14" max="90"><i>лет</i></label>
+                <label class="field"><span class="label">Рост</span><input id="height" type="number" inputmode="numeric" value="168" min="120" max="220"><i>см</i></label>
+              </div>
+
+              <label class="field"><span class="label">Вес</span><input id="weight" type="number" inputmode="numeric" value="62" min="30" max="250"><i>кг</i></label>
+
+              <div class="field">
+                <span class="label">Активность</span>
+                <div class="acts" id="acts">
+                  <button type="button" data-act="1.2">Сидячая</button>
+                  <button type="button" data-act="1.375" class="is-on">1-2 тренировки</button>
+                  <button type="button" data-act="1.55">3-5 тренировок</button>
+                  <button type="button" data-act="1.725">Каждый день</button>
+                </div>
+              </div>
+
+              <div class="normline"><span>Ваша норма</span><b id="normPreview">1 980 ккал</b></div>
+            </section>
+
+            <section class="step" data-step="3">
+              <h2>Проверьте норму</h2>
+              <p class="sub">Если цифра не нравится, поправьте вручную</p>
+
+              <div class="bigring">
+                <svg viewBox="0 0 160 160" aria-hidden="true">
+                  <circle class="bigring__track" cx="80" cy="80" r="70"/>
+                  <circle class="bigring__fill" id="bigFill" cx="80" cy="80" r="70"/>
+                </svg>
+                <div class="bigring__center">
+                  <b id="bigKcal">1 980</b>
+                  <span>ккал в день</span>
+                </div>
+              </div>
+
+              <div class="macros-preview" id="macrosPreview"></div>
+
+              <button class="editlink" id="editBtn" type="button">Поправить вручную</button>
+
+              <div class="manual" id="manualBox">
+                <div class="row2">
+                  <label class="field"><span class="label">Калории</span><input id="mKcal" type="number" inputmode="numeric"><i>ккал</i></label>
+                  <label class="field"><span class="label">Белки</span><input id="mP" type="number" inputmode="numeric"><i>г</i></label>
+                </div>
+                <div class="row2">
+                  <label class="field"><span class="label">Жиры</span><input id="mF" type="number" inputmode="numeric"><i>г</i></label>
+                  <label class="field"><span class="label">Углеводы</span><input id="mC" type="number" inputmode="numeric"><i>г</i></label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="sheet-foot">
+            <button class="btn-primary" id="nextBtn" type="button" disabled>Дальше</button>
+          </div>
+        </div>
+      </div>
+
+
+      <button class="install-banner" id="installBanner" type="button">
+        <span class="install-banner__icon">
+          <svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/><path d="M12 7v5M9.5 9.5h5"/></svg>
+        </span>
+        <span class="install-banner__title">Добавить приложение на главный экран</span>
+        <span class="install-banner__arrow">&#8250;</span>
+      </button>
+
+      <div class="sheet-layer" id="installLayer" aria-hidden="true">
+        <div class="scrim" id="installScrim"></div>
+        <div class="sheet sheet--guide" role="dialog" aria-modal="true" aria-label="Добавить на главный экран">
+          <div class="grabber"></div>
+          <div class="guide-head">
+            <b>Добавить на главный экран</b>
+            <button class="close" id="installClose" type="button" aria-label="Закрыть">&#10005;</button>
+          </div>
+          <div class="guide-body">
+            <div class="gseg" id="platformSeg">
+              <button type="button" data-p="ios" class="is-on">iPhone</button>
+              <button type="button" data-p="android">Android</button>
+            </div>
+            <div class="browsers" id="browsers"></div>
+            <ol class="gsteps" id="gsteps"></ol>
+            <p class="gtip">
+              <svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19 7"/></svg>
+              <span>Готово: иконка появится среди приложений на главном экране.</span>
+            </p>
+          </div>
+          <div class="sheet-foot">
+            <button class="btn-primary" id="installDone" type="button">Понятно</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="sheet-layer" id="setLayer" aria-hidden="true">
+        <div class="scrim" id="setScrim"></div>
+        <div class="sheet sheet--set" role="dialog" aria-modal="true" aria-label="Настройки">
+          <div class="grabber"></div>
+          <div class="guide-head">
+            <b>Настройки</b>
+            <button class="close" id="setClose" type="button" aria-label="Закрыть">&#10005;</button>
+          </div>
+          <div class="set-body">
+            <div class="plancard">
+              <div class="plancard__row">
+                <span class="plancard__label">Тариф</span>
+                <span class="plancard__name" id="planName">Free</span>
+              </div>
+              <p class="plancard__desc" id="planDesc">Фото: 0 из 3 · история 60 дней</p>
+              <button class="btn-primary btn-sm" id="planCta" type="button">Оформить Plus</button>
+            </div>
+            <div class="setlist">
+              <button class="setrow" id="exportRow" type="button">
+                <span>Экспорт дневника</span>
+                <span class="setrow__value" id="exportValue">Plus &#8250;</span>
+              </button>
+              <div class="setrow"><span>История</span><span class="setrow__value" id="histValue">60 дней</span></div>
+              <button class="setrow" id="remRow" type="button">
+                <span>Напоминания</span>
+                <span class="setrow__value" id="remValue">3 из 3 &#8250;</span>
+              </button>
+            </div>
+            <p class="setnote">Отмена подписки в один клик.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-layer" id="payLayer" aria-hidden="true">
+        <div class="scrim" id="payScrim"></div>
+        <div class="sheet sheet--pay" role="dialog" aria-modal="true" aria-label="Подписка Plus">
+          <div class="grabber"></div>
+          <button class="close payclose" id="payClose" type="button" aria-label="Закрыть">&#10005;</button>
+          <div class="paybody" id="payBody">
+            <span class="paymark">Plus</span>
+            <h2 class="paytitle" id="payTitle">Фото на этот месяц закончились</h2>
+            <p class="paysub" id="paySub">3 из 3 бесплатных распознаваний использовано</p>
+            <ul class="paylist">
+              <li>Фото без лимита</li>
+              <li>История без обрезки</li>
+              <li>Тренды и отчёты по неделям</li>
+              <li>Экспорт CSV и PDF для врача</li>
+            </ul>
+            <div class="paytoggle" id="payToggle">
+              <button type="button" data-plan="month">Месяц</button>
+              <button type="button" data-plan="year" class="is-on">Год</button>
+            </div>
+            <div class="payprice">
+              <b id="payPrice">1 990 ₽</b>
+              <span id="payPer">166 ₽ в месяц · выгода 44%</span>
+            </div>
+            <button class="btn-primary" id="payCta" type="button">Оформить Plus</button>
+            <div class="paymethods"><i>Мир</i><i>СБП</i><i>T-Pay</i></div>
+            <button class="paylater" id="payLater" type="button">Позже</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div class="sheet-layer" id="remLayer" aria-hidden="true">
+        <div class="scrim" id="remScrim"></div>
+        <div class="sheet sheet--rem" role="dialog" aria-modal="true" aria-label="Напоминания">
+          <div class="grabber"></div>
+          <div class="guide-head">
+            <b>Напоминания</b>
+            <button class="close" id="remClose" type="button" aria-label="Закрыть">&#10005;</button>
+          </div>
+          <div class="rem-body">
+            <p class="rem-sub">Пришлём уведомление, только если день ещё не заполнен</p>
+            <div id="remList"></div>
+            <button class="rem-add" id="remAdd" type="button">+ Своё напоминание</button>
+            <p class="rem-note">Без разрешения на уведомления напомним внутри приложения. До трёх напоминаний на Free.</p>
+          </div>
+          <div class="sheet-foot">
+            <button class="btn-primary" id="remSave" type="button">Сохранить</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet-layer" id="askLayer" aria-hidden="true">
+        <div class="scrim" id="askScrim"></div>
+        <div class="sheet sheet--mini" role="dialog" aria-modal="true" aria-label="Напоминание">
+          <div class="grabber"></div>
+          <div class="ask">
+            <div class="ask__ico">
+              <svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-6 6c0 4-1.5 5.5-1.5 5.5h15S18 13 18 9a6 6 0 0 0-6-6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M10 18a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            </div>
+            <h3 class="ask__title">Напомнить завтра про обед?</h3>
+            <p class="ask__sub" id="askSub">Одно уведомление в 13:30, если обед ещё не записан</p>
+            <button class="btn-primary" id="askYes" type="button">Включить напоминание</button>
+            <button class="ask__later" id="askNo" type="button">Не сейчас</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="addscreen" id="addScreen" aria-hidden="true">
+        <div class="add-head">
+          <button class="back" id="addBack" type="button" aria-label="Закрыть">&#8249;</button>
+          <b>Добавить продукт</b>
+          <span></span>
+        </div>
+        <div class="addmodes" id="addModes">
+          <button type="button" data-mode="search" class="is-on">Поиск</button>
+          <button type="button" data-mode="photo">Фото</button>
+          <button type="button" data-mode="barcode">Штрихкод</button>
+        </div>
+        <div class="add-body" id="addBody"></div>
+      </div>
+
+      <button class="fab" id="fabBtn" type="button" aria-label="Добавить продукт">+</button>
+
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <p class="hint">Прототип: шторка, три шага, первая запись. «Заново» сбрасывает сценарий</p>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

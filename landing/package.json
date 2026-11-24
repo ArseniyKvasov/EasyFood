@@ -1,0 +1,10 @@
+{
+  "name": "bitebalance",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 8765",
+    "check": "node scripts/check.mjs"
+  }
+}
