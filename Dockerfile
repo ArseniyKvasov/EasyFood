@@ -14,12 +14,12 @@ COPY web ./web
 COPY landing ./landing
 # Приложение собирается в dist/app, лендинг занимает корень dist.
 RUN APP_BASE=/app/ npm -w web run build
-RUN cp -r landing/index.html landing/404.html landing/robots.txt landing/sitemap.xml \
-          landing/favicon.svg landing/manifest.webmanifest landing/sw.js \
-          landing/analytics.js landing/gate.js landing/config.js \
-          landing/styles.css landing/script.js \
-          landing/assets landing/calculator landing/onboarding landing/legal \
-          web/dist/
+# Копируем лендинг целиком и сразу убираем то, что в образе не нужно:
+# так список файлов не придётся править при каждом изменении сайта.
+RUN cp -r landing/. web/dist/ \
+ && rm -rf web/dist/preview web/dist/docs web/dist/scripts web/dist/deploy \
+           web/dist/Dockerfile web/dist/package.json web/dist/README.md \
+           web/dist/.github web/dist/.dockerignore web/dist/.gitignore
 
 # ---------- Stage 2: сборка бэкенда ----------
 FROM node:20-alpine AS api-build
@@ -52,6 +52,10 @@ RUN npm cache clean --force
 
 COPY --from=api-build /app/backend/dist ./backend/dist
 COPY --from=web-build /app/web/dist ./web/dist
+
+# Файлы из рабочей папки могут прийти с режимом 600 — процессу под app
+# они должны быть доступны на чтение.
+RUN chmod -R a+rX /app/web/dist /app/backend/dist
 
 # Каталог для дампов базы: maintenance пишет сюда, compose монтирует том.
 RUN mkdir -p /app/data/backups && chown -R app:app /app/data
