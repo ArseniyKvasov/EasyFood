@@ -31,7 +31,7 @@ export type Nutrition = {
 
 export type Product = {
   id: number;
-  source: 'own' | 'off' | 'ai' | 'np';
+  source: 'own' | 'off' | 'ai' | 'perek' | 'np';
   /** Владелец продукта: каталог платформы или личный продукт пользователя. */
   owner: 'platform' | 'user';
   name: string;
@@ -46,9 +46,8 @@ export type Product = {
   useCount: number;
   /** Идентификатор продукта во внешнем каталоге. */
   extId?: string;
-  extSlug?: string;
-  /** Продукт найден, но КБЖУ ещё не подтянуты — нужно забрать из API. */
-  pending?: boolean;
+  /** Страница продукта во внешнем справочнике (для ссылки на источник). */
+  sourceUrl?: string;
 };
 
 export type Entry = {

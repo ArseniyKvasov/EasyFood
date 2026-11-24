@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
 import { fileToDataUrl } from '../lib/image';
 import { num } from '../lib/format';
@@ -27,8 +27,6 @@ type Props = {
   meal: MealId;
   mealName: string;
   refreshToken: number;
-  /** Идёт ли запрос КБЖУ у внешнего каталога. */
-  hydrating?: boolean;
   onPick: (product: Product) => void;
   onCreate: (prefill: { name?: string; barcode?: string }) => void;
 };
@@ -87,14 +85,12 @@ export function ProductPicker({
   meal,
   mealName,
   refreshToken,
-  hydrating = false,
   onPick,
   onCreate,
 }: Props) {
   const [tab, setTab] = useState<Tab>('search');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Product[]>([]);
-  const [remote, setRemote] = useState<Product[]>([]);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -117,7 +113,6 @@ export function ProductPicker({
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiEnabled, setAiEnabled] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
-  const galleryRef = useRef<HTMLInputElement>(null);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -127,7 +122,8 @@ export function ProductPicker({
       .catch(() => setAiEnabled(false));
   }, []);
 
-  // Поиск: своя база (с опечатками) + Nutriapix + Open Food Facts.
+  // Поиск: своя база (с опечатками) + Perek. Perek отдаёт КБЖУ сразу,
+  // поэтому догружать карточку отдельным запросом не нужно.
   // Если ничего не нашлось — подсказываем похожие названия.
   useEffect(() => {
     const q = query.trim();
@@ -151,8 +147,6 @@ export function ProductPicker({
         const res = await api.searchProducts(q);
         if (id !== requestId.current) return;
         setResults(res.products);
-        setRemote([]);
-        // Свои продукты и Nutriapix уже показаны — ждать Open Food Facts не нужно.
         setLoading(false);
         if (res.products.length === 0) {
           try {
@@ -164,16 +158,6 @@ export function ProductPicker({
         } else {
           setSuggestions([]);
         }
-        // Open Food Facts отвечает медленно — догружаем отдельно,
-        // чтобы результаты из своей базы и Nutriapix были видны сразу.
-        if (res.more) {
-          try {
-            const off = await api.getRemoteProducts(q);
-            if (id === requestId.current) setRemote(off.products);
-          } catch {
-            if (id === requestId.current) setRemote([]);
-          }
-        }
       } catch {
         if (id === requestId.current) setResults([]);
       } finally {
@@ -182,12 +166,6 @@ export function ProductPicker({
     }, 280);
     return () => window.clearTimeout(timer);
   }, [query, refreshToken]);
-
-  /** Свои продукты и Nutriapix + позже догруженный Open Food Facts. */
-  const allResults = useMemo(() => {
-    const seen = new Set(results.map((p) => p.name.toLowerCase()));
-    return [...results, ...remote.filter((p) => !seen.has(p.name.toLowerCase()))];
-  }, [results, remote]);
 
   const lookupCode = useCallback(
     async (raw: string) => {
@@ -469,13 +447,15 @@ export function ProductPicker({
     }
 
 
+    const perekUrl = results.find((p) => p.sourceUrl)?.sourceUrl;
+
     return (
       <>
         <div className="search-field">
           <IconSearch />
           <input
             className="form-control"
-            placeholder="Название продукта"
+            placeholder="Название или штрихкод"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -485,10 +465,9 @@ export function ProductPicker({
         <div className="list-head">
           {query.trim() ? 'Результаты' : 'Часто используете'}
           {loading && ' · обновляем…'}
-          {hydrating && ' · уточняем КБЖУ…'}
         </div>
 
-        {allResults.length === 0 && !loading ? (
+        {results.length === 0 && !loading ? (
           <div className="empty">
             <div className="empty__text">
               {query.trim() ? 'Ничего не найдено' : 'Пока нет продуктов'}
@@ -508,28 +487,29 @@ export function ProductPicker({
           </div>
         ) : (
           <div>
-            {allResults.map((p) => (
+            {results.map((p) => (
               <button
-                key={`${p.source}-${p.id || p.extSlug}`}
+                key={`${p.source}-${p.id}`}
                 className="product"
-                disabled={hydrating}
                 onClick={() => onPick(p)}
               >
                 <span className="product__body">
                   <span className="product__name">{p.name}</span>
                   <span className="product__meta">
-                    {p.pending ? (
-                      'КБЖУ уточняются…'
-                    ) : (
-                      <>
-                        {num(p.kcal)} ккал · Б {num(p.protein, 1)} · Ж {num(p.fat, 1)} · У{' '}
-                        {num(p.carbs, 1)} на 100 г
-                      </>
-                    )}
+                    {num(p.kcal)} ккал · Б {num(p.protein, 1)} · Ж {num(p.fat, 1)} · У{' '}
+                    {num(p.carbs, 1)} на 100 г
                   </span>
                 </span>
               </button>
             ))}
+            {perekUrl && (
+              <p className="hint mt-2 mb-0">
+                Данные:{' '}
+                <a href={perekUrl} target="_blank" rel="noreferrer noopener">
+                  perek.us
+                </a>
+              </p>
+            )}
           </div>
         )}
 

@@ -63,9 +63,10 @@ await app.register(pushRoutes);
 
 // ---------- Статика SPA ----------
 if (existsSync(staticRoot)) {
+  // Приложение живёт на /app/: корень домена занимает лендинг.
   await app.register(fastifyStatic, {
     root: staticRoot,
-    prefix: '/',
+    prefix: '/app/',
     index: ['index.html'],
     wildcard: false,
   });
@@ -74,7 +75,11 @@ if (existsSync(staticRoot)) {
     if (req.url.startsWith('/api/')) {
       return reply.code(404).send({ error: 'NOT_FOUND' });
     }
-    return reply.sendFile(join(staticRoot, 'index.html'));
+    // Любой неизвестный путь внутри приложения отдаёт SPA.
+    if (req.url === '/app' || req.url.startsWith('/app/')) {
+      return reply.header('Cache-Control', 'no-cache').sendFile('index.html', staticRoot);
+    }
+    return reply.code(404).send({ error: 'NOT_FOUND' });
   });
   app.log.info(`[web] serving static files from ${staticRoot}`);
 }
@@ -88,6 +93,9 @@ async function start(): Promise<void> {
   }
   await app.listen({ port: config.port, host: '0.0.0.0' });
   app.log.info(`BiteBalance API on http://0.0.0.0:${config.port}`);
+  if (!config.perek.apiKey) {
+    app.log.warn('PEREK_API_KEY не задан: поиск работает по своей базе, штрихкоды — через Open Food Facts');
+  }
 
   // История дневника живёт 60 дней. Чистим при старте, дальше этим
   // занимается сервис maintenance.

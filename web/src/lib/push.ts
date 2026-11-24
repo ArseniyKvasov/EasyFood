@@ -20,7 +20,8 @@ const supported = (): boolean =>
 export async function initPush(): Promise<void> {
   if (!supported()) return;
   try {
-    await navigator.serviceWorker.register('/sw.js');
+    // Приложение живёт на /app/, поэтому и worker у него свой, в своей области.
+    await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
     if (Notification.permission === 'default') {
       await Notification.requestPermission();
     }

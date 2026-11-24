@@ -1,26 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { config } from '../config.js';
+import { perekEnabled } from '../config.js';
 import { one, query } from '../db.js';
-import { lookupBarcode, search } from '../services/off.js';
+import { lookupBarcode } from '../services/off.js';
 import { findOrCacheOffProduct, mapProduct, PRODUCT_COLUMNS, type ProductRow } from '../services/store.js';
+import { searchLocal, upsertCatalogProduct } from '../services/catalog.js';
+import { lookupBarcodePerek, searchPerek, suggestPerek, toProductData, type PerekFood } from '../services/perek.js';
 import {
-  findByBarcode,
-  findByExtId,
-  findByExtSlug,
-  searchLocal,
-  suggestSimilar,
-  upsertCatalogProduct,
-} from '../services/catalog.js';
-import { displayName, normalizeName } from '../lib/text.js';
-import {
-  BudgetExceededError,
-  getFood,
-  nutriapixEnabled,
-  searchFood,
-  searchHints,
-  type NutriapixFood,
-} from '../services/nutriapix.js';
+  getQueryState,
+  markQueryEnriched,
+  markQueryFailed,
+  queryNeedsEnrichment,
+  touchQuery,
+} from '../services/sync.js';
+import { normalizeName } from '../lib/text.js';
 import type { Product } from '../types.js';
 
 const productBody = z.object({
@@ -35,24 +28,6 @@ const productBody = z.object({
   source: z.enum(['own', 'ai']).default('own'),
 });
 
-/** Продукт из внешнего каталога, у которого ещё нет КБЖУ. */
-const pendingProduct = (name: string, brand: string, slug: string): Product => ({
-  id: 0,
-  source: 'np',
-  owner: 'platform',
-  name: displayName(name, brand),
-  brand,
-  kcal: 0,
-  protein: 0,
-  fat: 0,
-  carbs: 0,
-  servingG: 100,
-  barcode: '',
-  useCount: 0,
-  extSlug: slug,
-  pending: true,
-});
-
 /** Ключ для склейки одинаковых продуктов из разных источников. */
 const dedupKey = (name: string, brand: string): string => {
   const suffix = brand ? ` (${brand})` : '';
@@ -60,116 +35,118 @@ const dedupKey = (name: string, brand: string): string => {
   return normalizeName(raw);
 };
 
-/** КБЖУ и порция из карточки Nutriapix. */
-const fromNutriapixFood = (food: NutriapixFood) => {
-  const serving = (food.servings ?? []).find((s) => s.is_default) ?? food.servings?.[0];
-  const amount = Number(serving?.metric_serving_amount ?? 0);
-  const grams = amount > 0 ? amount : 100;
-  return {
-    name: food.food_name,
-    brand: food.brand_name ?? '',
-    barcode: '',
-    kcal: Math.round((food.nutritions?.calories ?? 0) * 10) / 10,
-    protein: Math.round((food.nutritions?.protein?.total_protein ?? 0) * 10) / 10,
-    fat: Math.round((food.nutritions?.fat?.total_fat ?? 0) * 10) / 10,
-    carbs: Math.round((food.nutritions?.carbohydrate?.total_carbohydrate ?? 0) * 10) / 10,
-    servingG: grams,
-    extId: food.food_id,
-    extSlug: food.slug,
-  };
+/** Продукт Perek сразу кладём в общий каталог: так работают порции и история. */
+const cachePerekProduct = async (food: PerekFood, barcode = ''): Promise<Product | null> => {
+  const data = toProductData(food, barcode);
+  if (!data) return null;
+  return upsertCatalogProduct({ source: 'perek', ...data });
 };
+
+/** В поле поиска можно ввести штрихкод — 8–14 цифр, как в Perek. */
+const isBarcodeQuery = (q: string): boolean => /^\d{8,14}$/.test(q);
 
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
   /**
-   * Единый поиск: своя база (мгновенно, с опечатками) + Nutriapix
-   * + Open Food Facts. Nutriapix отдаёт только названия, КБЖУ
-   * подтягиваются при выборе продукта.
+   * Единый поиск по названию или штрихкоду:
+   *   1. своя база — личные продукты пользователя и общий каталог;
+   *   2. Perek — только для нового или устаревшего запроса (см. sync.ts);
+   *   3. для штрихкода, которого нет в Perek, — резервный Open Food Facts.
+   *
+   * Названия Open Food Facts больше не ищем: он остаётся только резервом
+   * для штрихкодов.
    */
   app.get('/api/products/search', async (req) => {
     const q = String((req.query as { q?: string }).q ?? '').trim();
     if (q.length < 2) return { products: [] };
 
-    const local = await searchLocal(q, 30);
+    const userId = req.user!.id;
+    const local = await searchLocal(q, userId, 30);
     const seen = new Set(local.map((p) => dedupKey(p.name, p.brand)));
     const products: Product[] = [...local];
 
-    if (nutriapixEnabled()) {
-      let res = await searchFood(q, 1, 20);
-      // Пусто — пробуем похожее название из своей базы: так чиним опечатку.
-      if (!res.results?.length) {
-        const similar = await suggestSimilar(q);
-        for (const name of similar) {
-          res = await searchFood(name, 1, 10);
-          if (res.results?.length) break;
-        }
+    const addPerek = async (food: PerekFood, barcode = ''): Promise<void> => {
+      const key = dedupKey(food.name, food.brand?.name ?? '');
+      if (seen.has(key)) return;
+      seen.add(key);
+      const product = await cachePerekProduct(food, barcode);
+      if (product) products.push(product);
+    };
+
+    if (isBarcodeQuery(q)) {
+      // В поле поиска ввели штрихкод: показываем только точное совпадение,
+      // а не размытые совпадения по цифрам в названиях.
+      const localHit = local.find((p) => p.barcode === q);
+      if (localHit) return { products: [localHit] };
+
+      const perek = await searchPerek(q, 5);
+      const food = perek.foods[0];
+      if (food) {
+        const product = await cachePerekProduct(food, q);
+        return { products: product ? [product] : [] };
       }
-      for (const item of res.results ?? []) {
-        const key = dedupKey(item.food_name, item.food_brand ?? '');
-        if (seen.has(key)) continue;
-        seen.add(key);
-        products.push(pendingProduct(item.food_name, item.food_brand ?? '', item.food_slug));
+
+      // Perek не знает код — последний резерв, Open Food Facts.
+      const off = await lookupBarcode(q);
+      if (!off) return { products: [] };
+      const product = await findOrCacheOffProduct({
+        name: off.name,
+        brand: off.brand,
+        kcal: off.nutrition.kcal,
+        protein: off.nutrition.protein,
+        fat: off.nutrition.fat,
+        carbs: off.nutrition.carbs,
+        servingG: off.servingG,
+        barcode: off.code,
+      });
+      return { products: [product] };
+    }
+
+    // Обогащаем каждый уникальный запрос один раз. Повторные поиски
+    // обслуживаются локальной базой и не зависят от доступности Perek.
+    const state = await touchQuery(q);
+    if (perekEnabled() && state && queryNeedsEnrichment(state)) {
+      const res = await searchPerek(q, 20);
+      if (res.ok) {
+        for (const food of res.foods) {
+          await addPerek(food);
+        }
+        await markQueryEnriched(state.query, res.foods.length);
+      } else {
+        await markQueryFailed(state.query, 'Perek request failed');
       }
     }
 
-    // Open Food Facts отвечает медленно, поэтому его поиск идёт отдельным
-    // запросом — фронтенд догружает результаты, не блокируя ввод.
-    return { products, more: products.length < 10 && config.openFoodFacts };
+    return { products };
   });
 
-  /** Подсказки для поиска: свои из базы + подсказки Nutriapix. */
+  /** Подсказки для поиска: свои из базы + Perek. */
   app.get('/api/products/hints', async (req) => {
     const q = String((req.query as { q?: string }).q ?? '').trim();
     if (q.length < 2) return { hints: [] };
 
     const hints: string[] = [];
     const seen = new Set<string>();
-    const local = await searchLocal(q, 6);
+    const local = await searchLocal(q, req.user!.id, 6);
     for (const p of local) {
-      if (seen.has(p.name)) continue;
-      seen.add(p.name);
+      const key = normalizeName(p.name);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
       hints.push(p.name);
     }
-    if (nutriapixEnabled()) {
-      for (const h of await searchHints(q, 6)) {
-        if (!h || seen.has(h)) continue;
-        seen.add(h);
+    // Perek-подсказки нужны только пока запрос ещё не обогащён.
+    // Если он уже в базе (или только что пусто), лишний запрос не делаем.
+    const state = await getQueryState(q);
+    const askPerek = hints.length < 8 && (!state || queryNeedsEnrichment(state));
+    if (askPerek) {
+      for (const h of await suggestPerek(q, 6)) {
+        const key = normalizeName(h);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
         hints.push(h);
       }
     }
     return { hints: hints.slice(0, 8) };
-  });
-
-  /**
-   * Подтягивает КБЖУ из Nutriapix и кладёт продукт в общий каталог.
-   * Тратит один запрос из месячного бюджета.
-   */
-  app.get('/api/products/external/nutriapix/:slug', async (req, reply) => {
-    if (!nutriapixEnabled()) {
-      return reply.code(501).send({ error: 'NUTRIAPIX_NOT_CONFIGURED' });
-    }
-    const slug = String((req.params as { slug: string }).slug ?? '').trim();
-    if (!slug) return reply.code(400).send({ error: 'VALIDATION' });
-
-    // Уже скачан — отдаём из базы, не тратя запрос из лимита.
-    const known = await findByExtSlug(slug);
-    if (known) return { product: known };
-
-    try {
-      const food = await getFood({ slug });
-      if (!food) return reply.code(404).send({ error: 'NOT_FOUND' });
-      const data = fromNutriapixFood(food);
-      const product = await upsertCatalogProduct({ source: 'np', ...data });
-      return { product };
-    } catch (err) {
-      if (err instanceof BudgetExceededError) {
-        return reply.code(429).send({
-          error: 'BUDGET_EXCEEDED',
-          message: 'Каталог временно недоступен.',
-        });
-      }
-      throw err;
-    }
   });
 
   app.get('/api/products', async (req) => {
@@ -317,9 +294,9 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
-   * Штрихкод: своя база → Nutriapix → Open Food Facts.
-   * Внешний источник сразу кладёт продукт в каталог, чтобы повторные
-   * обращения не тратили лимиты.
+   * Штрихкод: своя база → Perek → Open Food Facts.
+   * Perek сразу кладёт продукт в каталог, чтобы повторные обращения
+   * не тратили лимит запросов.
    */
   app.get('/api/products/barcode/:code', async (req, reply) => {
     const userId = req.user!.id;
@@ -334,23 +311,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     );
     if (local) return { product: mapProduct(local), origin: 'local' };
 
-    if (nutriapixEnabled()) {
-      try {
-        const food = await getFood({ barcode: code });
-        if (food) {
-          const data = fromNutriapixFood(food);
-          const product = await upsertCatalogProduct({
-            source: 'np',
-            ...data,
-            barcode: code,
-          });
-          return { product, origin: 'nutriapix' };
-        }
-      } catch (err) {
-        if (!(err instanceof BudgetExceededError)) {
-          console.warn('[nutriapix] barcode lookup failed:', (err as Error).message);
-        }
-      }
+    const perek = await lookupBarcodePerek(code);
+    if (perek) {
+      const product = await cachePerekProduct(perek, code);
+      if (product) return { product, origin: 'perek' };
     }
 
     const off = await lookupBarcode(code);
@@ -367,28 +331,5 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       barcode: off.code,
     });
     return { product, origin: 'openfoodfacts' };
-  });
-
-  /** Поиск в Open Food Facts — используется, когда в базе ничего не нашлось. */
-  app.get('/api/products/remote', async (req, reply) => {
-    const q = String((req.query as { q?: string }).q ?? '').trim();
-    if (!q) return { products: [] };
-    const found = await search(q, 20);
-    if (!found.length) return { products: [] };
-    const products = await Promise.all(
-      found.map((p) =>
-        findOrCacheOffProduct({
-          name: p.name,
-          brand: p.brand,
-          kcal: p.nutrition.kcal,
-          protein: p.nutrition.protein,
-          fat: p.nutrition.fat,
-          carbs: p.nutrition.carbs,
-          servingG: p.servingG,
-          barcode: p.code,
-        }),
-      ),
-    );
-    return reply.send({ products });
   });
 }

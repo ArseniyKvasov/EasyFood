@@ -98,7 +98,16 @@ YANDEX_CLIENT_SECRET=
 YANDEX_REDIRECT_URI=https://food.fastclass.ru/api/auth/yandex/callback
 YANDEX_SCOPE=login:info login:email
 
-# Поиск по штрихкодам и названиям через Open Food Facts
+# Основная база продуктов и КБЖУ — Perek
+PEREK_API_KEY=
+PEREK_BASE_URL=https://perek.us/api/v1/foods
+PEREK_REQUESTS_PER_MINUTE=18
+PEREK_QUERY_TTL_DAYS=30
+PEREK_EMPTY_QUERY_TTL_DAYS=7
+PEREK_SYNC_BATCH=3
+PEREK_SYNC_INTERVAL_MINUTES=15
+
+# Резервный поиск по штрихкоду через Open Food Facts
 OPEN_FOOD_FACTS_ENABLED=true
 
 # Распознавание блюд по фото (необязательно)
@@ -161,51 +170,72 @@ OPENAI_TEMPERATURE=            # пусто: Haiku 5.5 принимает тол
 OPENAI_RESPONSE_FORMAT=json_schema
 ```
 
-### Nutriapix: каталог продуктов
+### Perek: каталог продуктов
 
-Основной источник данных о продуктах. Ключ выдаётся на
-<https://nutriapix.ru>, в `.env`:
-
-```bash
-NUTRIAPIX_API_KEY=...
-NUTRIAPIX_BASE_URL=https://nutriapix.ru/api/v1
-NUTRIAPIX_MONTHLY_BUDGET=1000        # лимит запросов /food в месяц
-NUTRIAPIX_BACKFILL_BUDGET=700         # сколько из них отдаём предзагрузке
-NUTRIAPIX_BACKFILL_BATCH=2            # продуктов за один проход
-NUTRIAPIX_BACKFILL_INTERVAL_HOURS=2   # как часто запускать предзагрузку
-```
-
-Пока ключа нет, поиск работает на своей базе и Open Food Facts.
-
-**Лимиты.** У тестового токена `/food` — 1000 запросов в месяц, остальные
-методы без месячного ограничения. Приложение считает расход сам, в таблице
-`api_usage`:
-
-| Счётчик | Кто тратит | Лимит |
-|---------|-----------|-------|
-| `nutriapix.food` | пользователи: доскачиваем КБЖУ выбранного продукта | `MONTHLY_BUDGET - BACKFILL_BUDGET` |
-| `nutriapix.food.backfill` | предзагрузка каталога | `BACKFILL_BUDGET` |
-
-Поиск (`/food/search`) и подсказки (`/food/search/hints`) лимита не расходуют
-вообще. Частота запросов тоже ограничена: 5 запросов в секунду на обычные
-методы и 20 на подсказки.
-
-**Предзагрузка каталога.** Сервис `maintenance` раз в
-`NUTRIAPIX_BACKFILL_INTERVAL_HOURS` берёт следующий запрос из очереди
-`catalog_backfill`, находит в Nutriapix продукты по этому запросу и
-дозакачивает их КБЖУ в нашу базу. Очередь стартует с частых продуктов
-(гречка, рис, овсянка, курица, молоко и ещё 25) — по два продукта за проход.
+Основной источник данных о российских продуктах и КБЖУ. Ключ выдаётся в
+кабинете <https://app.perek.us/developers> после входа по почте, Telegram или
+MAX. В `.env`:
 
 ```bash
-docker compose logs -f maintenance | grep каталог
+PEREK_API_KEY=...
+PEREK_BASE_URL=https://perek.us/api/v1/foods
+PEREK_REQUESTS_PER_MINUTE=18   # бесплатный тариф — 20 запросов в минуту
+PEREK_QUERY_TTL_DAYS=30        # не ходить в API за тем же запросом
+PEREK_EMPTY_QUERY_TTL_DAYS=7   # запросы без результатов проверяем чаще
+PEREK_SYNC_BATCH=3             # запросов за один проход обслуживания
+PEREK_SYNC_INTERVAL_MINUTES=15 # как часто запускать синхронизацию
 ```
 
-**Сколько каталог наполнен:**
+Пока ключа нет, поиск работает по своей базе, а штрихкоды проверяются в
+резервном Open Food Facts. Поле поиска принимает и название, и штрихкод:
+8–14 цифр уходят в Perek как штрихкод.
+
+### Как база наполняется и почему поиск перестаёт зависеть от API
+
+1. Пользователь вводит название. Сначала ищет своя база.
+2. Уникальный запрос попадает в `product_queries`. Первый раз он обогащается
+   из Perek: найденные карточки сохраняются в `products` с
+   `source = 'perek'`.
+3. Следующие такие же поиски идут только по своей базе: API не вызывается,
+   пока не истечёт `PEREK_QUERY_TTL_DAYS`. Продукты, порции и история
+   остаются доступны даже при недоступном Perek.
+4. Если Perek ответил ошибкой или упёрся в лимит, запрос помечается
+   `failed` и повторяется позже. Этим занимается сервис `maintenance`:
+   раз в `PEREK_SYNC_INTERVAL_MINUTES` он добирает до `PEREK_SYNC_BATCH`
+   ожидающих запросов.
+5. Пока ключа нет, запросы просто копятся в очереди. После добавления ключа
+   обслуживание постепенно их обогатит.
+
+Так база растёт по реальному спросу, а не выкачивается целиком. Повторные
+запросы, штрихкоды и всё, что уже сохранено, работают без сети.
+
+> **Ограничение Perek.** Условия API запрещают массово выкачивать справочник
+> целиком. Поэтому фоновая синхронизация обрабатывает только реальные
+> поисковые запросы пользователей. Полный офлайн-справочник всего Perek
+> возможен только по отдельному соглашению с Perek (у них есть вариант для
+> больших объёмов) либо на основе открытого дампа, например Open Food Facts
+> (ODbL). Без этого «полная независимость от API» недостижима легально.
+
+**Лимиты бесплатного тарифа.** 500 запросов в сутки, 150 разных продуктов в
+выдаче поиска и 50 карточек/штрихкодов в сутки, 20 запросов в минуту.
+Приложение держит частоту чуть ниже лимита и кэширует ответы в памяти.
+
+**Ссылка на источник.** На бесплатном тарифе рядом с цифрами нужна ссылка
+«Данные: perek.us» на страницу продукта — она показывается под результатами
+поиска.
+
+**Сколько продуктов и запросов уже в базе:**
 
 ```bash
 docker compose exec -T db psql -U bitebalance -d bitebalance \
-  -c "SELECT count(*) FROM products WHERE user_id IS NULL AND source = 'np';" \
-  -c "SELECT provider, used FROM api_usage;"
+  -c "SELECT count(*) FROM products WHERE user_id IS NULL AND source = 'perek';" \
+  -c "SELECT status, count(*) FROM product_queries GROUP BY status;"
+```
+
+Логи фоновой синхронизации:
+
+```bash
+docker compose logs -f maintenance | grep каталог
 ```
 
 ### Фото: base64 вместо хранилища

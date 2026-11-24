@@ -36,17 +36,22 @@ export const config = {
     .map((s) => s.trim())
     .filter(Boolean),
   openFoodFacts: bool(process.env.OPEN_FOOD_FACTS_ENABLED, true),
-  nutriapix: {
-    apiKey: process.env.NUTRIAPIX_API_KEY ?? '',
-    baseUrl: (process.env.NUTRIAPIX_BASE_URL ?? 'https://nutriapix.ru/api/v1').replace(/\/+$/, ''),
-    /** Сколько запросов в месяц можно сделать к /food (лимит тестового токена). */
-    monthlyBudget: num(process.env.NUTRIAPIX_MONTHLY_BUDGET, 1000),
-    /** Сколько из этих запросов разрешено тратить на предзагрузку каталога. */
-    backfillBudget: num(process.env.NUTRIAPIX_BACKFILL_BUDGET, 700),
-    /** Сколько продуктов докачивать за один проход предзагрузки. */
-    backfillBatch: num(process.env.NUTRIAPIX_BACKFILL_BATCH, 2),
-    /** Как часто запускать предзагрузку, часов. */
-    backfillIntervalHours: num(process.env.NUTRIAPIX_BACKFILL_INTERVAL_HOURS, 2),
+  perek: {
+    apiKey: (process.env.PEREK_API_KEY ?? '').trim(),
+    baseUrl: (process.env.PEREK_BASE_URL ?? 'https://perek.us/api/v1/foods').replace(/\/+$/, ''),
+    /**
+     * Лимит бесплатного тарифа — 20 запросов в минуту. Держим чуть ниже,
+     * чтобы параллельные пользователи не упирались в 429.
+     */
+    requestsPerMinute: num(process.env.PEREK_REQUESTS_PER_MINUTE, 18),
+    /** Сколько дней не ходить в Perek за уже обогащённым запросом. */
+    queryTtlDays: num(process.env.PEREK_QUERY_TTL_DAYS, 30),
+    /** Для запросов без результатов — короче, чтобы подхватить новые продукты. */
+    emptyQueryTtlDays: num(process.env.PEREK_EMPTY_QUERY_TTL_DAYS, 7),
+    /** Сколько запросов обогащать за один проход обслуживания. */
+    syncBatch: num(process.env.PEREK_SYNC_BATCH, 3),
+    /** Как часто запускать фоновую синхронизацию, минут. */
+    syncIntervalMinutes: num(process.env.PEREK_SYNC_INTERVAL_MINUTES, 15),
   },
   ai: {
     apiKey: process.env.OPENAI_API_KEY ?? '',
@@ -99,6 +104,9 @@ export const config = {
 };
 
 export const aiEnabled = () => config.ai.apiKey.length > 0;
+
+/** Задан ли ключ Perek — без него поиск идёт только по своей базе. */
+export const perekEnabled = () => config.perek.apiKey.length > 0;
 
 /** Заданы ли ключи приложения Яндекс ID — без них вход невозможен. */
 export const yandexEnabled = () =>

@@ -22,8 +22,11 @@ import {
 } from '../services/yandex.js';
 
 const CALLBACK_PATH = '/api/auth/yandex/callback';
-/** Куда возвращаем пользователя после входа. */
-const HOME = '/';
+/**
+ * Куда возвращаем пользователя после входа. Если приложение живёт отдельно
+ * от лендинга (например на /app/), путь задаётся через APP_HOME.
+ */
+const HOME = (process.env.APP_HOME ?? '/').trim() || '/';
 
 const first = (value: string | string[] | undefined): string =>
   (Array.isArray(value) ? value[0] : value)?.split(',')[0].trim() ?? '';

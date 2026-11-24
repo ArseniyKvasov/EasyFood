@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // В продакшене приложение живёт на /app/, лендинг занимает корень.
+  // В разработке base остаётся '/', чтобы открывать http://localhost:5173/.
+  base: process.env.APP_BASE ?? '/',
   server: {
     port: 5173,
     proxy: {

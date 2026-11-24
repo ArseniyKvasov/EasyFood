@@ -49,6 +49,12 @@ const json = (body: unknown): RequestInit => ({
 /** Вход через Яндекс ID: сервер сам уводит на страницу согласия. */
 export const YANDEX_SIGN_IN_URL = '/api/auth/yandex/start';
 
+/**
+ * Куда уводим пользователя без сессии. Приложение доступно только авторизованным,
+ * остальные видят лендинг. Адрес задаётся через VITE_LANDING_URL.
+ */
+export const LANDING_URL: string = import.meta.env.VITE_LANDING_URL || '/';
+
 export const api = {
   // --- Аккаунт ---
   me: () => request<User>('/api/auth/me'),
@@ -81,27 +87,18 @@ export const api = {
   getProducts: (q = '') =>
     request<{ products: Product[] }>(`/api/products?q=${encodeURIComponent(q)}`),
 
-  /** Единый поиск: своя база + Nutriapix. `more` — есть смысл догрузить Open Food Facts. */
+  /** Единый поиск: своя база + Perek. */
   searchProducts: (q: string) =>
-    request<{ products: Product[]; more: boolean }>(
-      `/api/products/search?q=${encodeURIComponent(q)}`,
-    ),
+    request<{ products: Product[] }>(`/api/products/search?q=${encodeURIComponent(q)}`),
 
   /** Подсказки для поиска. */
   productHints: (q: string) =>
     request<{ hints: string[] }>(`/api/products/hints?q=${encodeURIComponent(q)}`),
 
-  /** Забирает КБЖУ из Nutriapix и сохраняет продукт в каталог. */
-  hydrateProduct: (slug: string) =>
-    request<{ product: Product }>(`/api/products/external/nutriapix/${encodeURIComponent(slug)}`),
-
   getProduct: (id: number) => request<Product>(`/api/products/${id}`),
 
   getPortions: (id: number) =>
     request<{ portions: { grams: number; uses: number }[] }>(`/api/products/${id}/portions`),
-
-  getRemoteProducts: (q: string) =>
-    request<{ products: Product[] }>(`/api/products/remote?q=${encodeURIComponent(q)}`),
 
   getProductByBarcode: (code: string) =>
     request<{ product: Product; origin: string }>(`/api/products/barcode/${code}`),

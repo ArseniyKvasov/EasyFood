@@ -218,6 +218,34 @@ const migrations: Migration[] = [
       DELETE FROM sessions;
     `,
   },
+  {
+    id: '008_catalog_sync',
+    sql: `
+      -- Очередь постепенного наполнения каталога по реальному спросу.
+      -- Каждый уникальный поисковый запрос обогащается один раз, результаты
+      -- остаются в products. Повторные запросы обслуживаются локально.
+      CREATE TABLE IF NOT EXISTS product_queries (
+        query       TEXT PRIMARY KEY,
+        raw_query   TEXT NOT NULL,
+        hits        INTEGER NOT NULL DEFAULT 1,
+        found       INTEGER NOT NULL DEFAULT 0,
+        status      TEXT NOT NULL DEFAULT 'pending',
+        attempts    INTEGER NOT NULL DEFAULT 0,
+        last_error  TEXT,
+        last_seen   TIMESTAMPTZ NOT NULL DEFAULT now(),
+        enriched_at TIMESTAMPTZ,
+        next_try    TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+
+      CREATE INDEX IF NOT EXISTS product_queries_sync_idx
+        ON product_queries (next_try)
+        WHERE enriched_at IS NULL OR status = 'failed';
+
+      CREATE INDEX IF NOT EXISTS product_queries_hits_idx
+        ON product_queries (hits DESC, last_seen DESC);
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

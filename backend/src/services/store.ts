@@ -16,7 +16,6 @@ export type ProductRow = {
   user_id: string | null;
   brand: string | null;
   ext_id: string | null;
-  ext_slug: string | null;
   norm_name: string | null;
 };
 
@@ -37,11 +36,14 @@ export function mapProduct(r: ProductRow): Product {
     barcode: r.barcode ?? '',
     useCount: Number(r.use_count),
     extId: r.ext_id ?? undefined,
-    extSlug: r.ext_slug ?? undefined,
+    sourceUrl:
+      r.source === 'perek' && r.ext_id?.startsWith('perek:')
+        ? `https://perek.us/food/${r.ext_id.slice('perek:'.length)}`
+        : undefined,
   };
 }
 
-export const PRODUCT_COLUMNS = `id, source, name, kcal, protein, fat, carbs, serving_g, barcode, use_count, user_id, brand, ext_id, ext_slug, norm_name`;
+export const PRODUCT_COLUMNS = `id, source, name, kcal, protein, fat, carbs, serving_g, barcode, use_count, user_id, brand, ext_id, norm_name`;
 
 export async function getSettings(userId: number): Promise<Settings> {
   await query(`INSERT INTO settings (user_id) VALUES ($1) ON CONFLICT DO NOTHING`, [userId]);

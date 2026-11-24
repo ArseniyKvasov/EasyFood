@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError } from './api';
+import { api, ApiError, LANDING_URL } from './api';
 import { shiftDate, today } from './lib/date';
 import { initPush, syncPushSubscription } from './lib/push';
 import { num } from './lib/format';
@@ -83,8 +83,6 @@ export default function App() {
   const [closing, setClosing] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [productVersion, setProductVersion] = useState(0);
-  /** Идёт ли запрос КБЖУ у внешнего каталога. */
-  const [hydrating, setHydrating] = useState(false);
   const toastId = useRef(0);
   const closeTimer = useRef<number | undefined>(undefined);
 
@@ -99,6 +97,26 @@ export default function App() {
       .catch(() => setUser(null))
       .finally(() => setAuthChecked(true));
   }, []);
+
+  /**
+   * Без сессии приложение показывать нечего: уводим на лендинг.
+   * Если лендинг настроен на тот же адрес, редирект бессмысленен и зациклится —
+   * в этом случае остаётся экран входа.
+   */
+  const landingIsCurrentPage = useMemo(() => {
+    try {
+      const target = new URL(LANDING_URL, window.location.origin);
+      // Совпадает и хост, и путь: редирект замкнулся бы сам на себя.
+      return target.origin === window.location.origin && target.pathname === window.location.pathname;
+    } catch {
+      return true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!authChecked || user || authError || landingIsCurrentPage) return;
+    window.location.replace(LANDING_URL);
+  }, [authChecked, user, authError, landingIsCurrentPage]);
 
   // Разрешение на уведомления спрашиваем при каждом открытии страницы,
   // пока браузер его не запомнил.
@@ -375,28 +393,8 @@ export default function App() {
             meal={top.meal}
             mealName={MEAL_NAMES[top.meal]}
             refreshToken={productVersion}
-            hydrating={hydrating}
-            onPick={async (p) => {
-              // Продукт из внешнего каталога приходит без КБЖУ — забираем их
-              // из API и сразу кладём продукт в нашу базу.
-              if (p.pending && p.extSlug) {
-                setHydrating(true);
-                try {
-                  const res = await api.hydrateProduct(p.extSlug);
-                  push({
-                    kind: 'grams',
-                    product: res.product,
-                    entryId: null,
-                    grams: res.product.servingG || 100,
-                    meal: top.meal,
-                  });
-                } catch {
-                  pushToast('Не удалось получить КБЖУ продукта');
-                } finally {
-                  setHydrating(false);
-                }
-                return;
-              }
+            onPick={(p) => {
+              // Perek отдаёт КБЖУ сразу вместе с результатом поиска.
               push({
                 kind: 'grams',
                 product: p,
@@ -521,7 +519,19 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthScreen error={authError} />;
+    // Ошибку входа показываем на месте: человек должен понять, что случилось,
+    // и повторить попытку. Во всех остальных случаях уходим на лендинг.
+    if (authError || landingIsCurrentPage) {
+      return <AuthScreen error={authError} />;
+    }
+    return (
+      <div className="auth" role="status" aria-live="polite">
+        <span className="spinner" style={{ color: 'var(--accent)' }} />
+        <a href={LANDING_URL} style={{ marginTop: 14, fontSize: 14 }}>
+          Переходим на главную
+        </a>
+      </div>
+    );
   }
 
   return (

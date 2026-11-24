@@ -3,7 +3,7 @@
   "short_name": "BiteBalance",
   "description": "Дневник питания с распознаванием блюд по фото и сканером штрихкодов",
   "lang": "ru",
-  "start_url": "/",
+  "start_url": "/app/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#FAF6EF",

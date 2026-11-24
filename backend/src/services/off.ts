@@ -1,5 +1,5 @@
 import { config } from '../config.js';
-import type { Nutrition, Product } from '../types.js';
+import type { Nutrition } from '../types.js';
 
 const BASE = 'https://world.openfoodfacts.org';
 const UA = 'BiteBalance/1.0 (+https://github.com/ArseniyKvasov/EasyFood)';
@@ -90,43 +90,4 @@ export async function lookupBarcode(code: string): Promise<OffProduct | null> {
   const product = (data as { product?: Record<string, unknown> }).product;
   if (status !== 1 || !product) return null;
   return normalize(product);
-}
-
-export async function search(query: string, limit = 20): Promise<OffProduct[]> {
-  const q = query.trim();
-  if (!q) return [];
-  const fields = 'code,product_name,product_name_ru,brands,nutriments,serving_size,serving_quantity,image_front_small_url';
-  const params = new URLSearchParams({
-    search_terms: q,
-    search_simple: '1',
-    action: 'process',
-    json: '1',
-    page_size: String(limit),
-    fields,
-  });
-  const data = await offFetch(`/cgi/search.pl?${params.toString()}`);
-  if (!data || typeof data !== 'object') return [];
-  const products = (data as { products?: Record<string, unknown>[] }).products ?? [];
-  return products
-    .map((p) => normalize(p))
-    .filter((p): p is OffProduct => p !== null && p.nutrition.kcal > 0);
-}
-
-/** Приводит продукт OFF к нашей модели продукта. */
-export function toProduct(p: OffProduct, id: number): Product {
-  return {
-    id,
-    source: 'off',
-    // Продукты Open Food Facts попадают в общий каталог платформы.
-    owner: 'platform',
-    brand: p.brand ?? '',
-    name: p.brand ? `${p.brand} — ${p.name}` : p.name,
-    kcal: p.nutrition.kcal,
-    protein: p.nutrition.protein,
-    fat: p.nutrition.fat,
-    carbs: p.nutrition.carbs,
-    servingG: p.servingG || 100,
-    barcode: p.code,
-    useCount: 0,
-  };
 }

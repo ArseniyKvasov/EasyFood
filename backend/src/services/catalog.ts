@@ -11,10 +11,12 @@ import { mapProduct, PRODUCT_COLUMNS, type ProductRow } from './store.js';
 const SIMILARITY_THRESHOLD = 0.24;
 
 /**
- * Поиск по своей базе. Триграммы Postgres позволяют находить продукт
- * даже с опечаткой: «гречк варёная» найдёт «Гречка варёная».
+ * Поиск по своей базе: личные продукты пользователя и общий каталог.
+ * Триграммы Postgres позволяют находить продукт даже с опечаткой:
+ * «гречк варёная» найдёт «Гречка варёная». Штрихкод ищется точным
+ * совпадением — так в поле поиска можно ввести цифры.
  */
-export const searchLocal = async (q: string, limit = 30): Promise<Product[]> => {
+export const searchLocal = async (q: string, userId: number, limit = 30): Promise<Product[]> => {
   const norm = normalizeName(q);
   if (!norm) return [];
   // Совсем короткий запрос ищем только по совпадению строк: триграммы
@@ -23,40 +25,31 @@ export const searchLocal = async (q: string, limit = 30): Promise<Product[]> => 
 
   const rows = await query<ProductRow>(
     `SELECT ${PRODUCT_COLUMNS} FROM products
-      WHERE norm_name LIKE $1 || '%'
-         OR name ILIKE '%' || $2 || '%'
-         OR ($5 AND similarity(norm_name, $3) > $4)
-      ORDER BY CASE
-                 WHEN norm_name = $3 THEN 0
-                 WHEN norm_name LIKE $1 || '%' THEN 1
-                 ELSE 2
+      WHERE (user_id IS NULL OR user_id = $2)
+        AND (
+          norm_name LIKE $1 || '%'
+          OR name ILIKE '%' || $3 || '%'
+          OR barcode = $3
+          OR ($6 AND similarity(norm_name, $4) > $5)
+        )
+      ORDER BY CASE WHEN user_id = $2 THEN 0 ELSE 1 END,
+               CASE
+                 WHEN barcode = $3 THEN 0
+                 WHEN norm_name = $4 THEN 1
+                 WHEN norm_name LIKE $1 || '%' THEN 2
+                 ELSE 3
                END,
-               similarity(norm_name, $3) DESC,
+               similarity(norm_name, $4) DESC,
                use_count DESC,
                lower(name)
-      LIMIT $6`,
-    [norm, q.trim(), norm, SIMILARITY_THRESHOLD, fuzzy, limit],
+      LIMIT $7`,
+    [norm, userId, q.trim(), norm, SIMILARITY_THRESHOLD, fuzzy, limit],
   );
   return rows.map(mapProduct);
 };
 
-/** Похожие названия из своей базы — ими чиним опечатки в запросе. */
-export const suggestSimilar = async (q: string, threshold = 0.3): Promise<string[]> => {
-  const norm = normalizeName(q);
-  if (!norm) return [];
-  const rows = await query<{ name: string; score: number }>(
-    `SELECT name, similarity(norm_name, $1)::float8 AS score
-       FROM products
-      WHERE similarity(norm_name, $1) > $2
-      ORDER BY score DESC
-      LIMIT 3`,
-    [norm, threshold],
-  );
-  return rows.map((r) => r.name);
-};
-
 export type CatalogProduct = {
-  source: 'off' | 'np';
+  source: 'off' | 'perek' | 'np';
   name: string;
   brand?: string;
   barcode?: string;
@@ -66,7 +59,6 @@ export type CatalogProduct = {
   carbs: number;
   servingG?: number;
   extId?: string;
-  extSlug?: string;
 };
 
 /**
@@ -93,9 +85,9 @@ export const upsertCatalogProduct = async (p: CatalogProduct): Promise<Product> 
   if (existing) {
     const rows = await query<ProductRow>(
       `UPDATE products
-          SET kcal = $2, protein = $3, fat = $4, carbs = $5,
+          SET source = $9, kcal = $2, protein = $3, fat = $4, carbs = $5,
               serving_g = $6, barcode = CASE WHEN $7::text <> '' THEN $7 ELSE barcode END,
-              ext_id = COALESCE($8::text, ext_id), ext_slug = COALESCE($9::text, ext_slug),
+              ext_id = COALESCE($8::text, ext_id),
               norm_name = $10
         WHERE id = $1
       RETURNING ${PRODUCT_COLUMNS}`,
@@ -108,59 +100,42 @@ export const upsertCatalogProduct = async (p: CatalogProduct): Promise<Product> 
         serving,
         barcode,
         p.extId ?? null,
-        p.extSlug ?? null,
+        p.source,
         norm,
       ],
     );
     return mapProduct(rows[0]);
   }
 
-  const rows = await query<ProductRow>(
-    `INSERT INTO products (source, name, brand, kcal, protein, fat, carbs, serving_g, barcode, ext_id, ext_slug, norm_name, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NULL)
-     RETURNING ${PRODUCT_COLUMNS}`,
-    [
-      p.source,
-      p.name,
-      brand,
-      p.kcal,
-      p.protein,
-      p.fat,
-      p.carbs,
-      serving,
-      barcode,
-      p.extId ?? null,
-      p.extSlug ?? null,
-      norm,
-    ],
-  );
-  return mapProduct(rows[0]);
-};
-
-/** Есть ли уже такой продукт в каталоге. */
-export const findByBarcode = async (barcode: string): Promise<Product | null> => {
-  if (!barcode) return null;
-  const row = await one<ProductRow>(
-    `SELECT ${PRODUCT_COLUMNS} FROM products WHERE user_id IS NULL AND barcode = $1 LIMIT 1`,
-    [barcode],
-  );
-  return row ? mapProduct(row) : null;
-};
-
-export const findByExtSlug = async (extSlug: string): Promise<Product | null> => {
-  if (!extSlug) return null;
-  const row = await one<ProductRow>(
-    `SELECT ${PRODUCT_COLUMNS} FROM products WHERE ext_slug = $1 LIMIT 1`,
-    [extSlug],
-  );
-  return row ? mapProduct(row) : null;
-};
-
-export const findByExtId = async (extId: string): Promise<Product | null> => {
-  if (!extId) return null;
-  const row = await one<ProductRow>(
-    `SELECT ${PRODUCT_COLUMNS} FROM products WHERE ext_id = $1 LIMIT 1`,
-    [extId],
-  );
-  return row ? mapProduct(row) : null;
+  try {
+    const rows = await query<ProductRow>(
+      `INSERT INTO products (source, name, brand, kcal, protein, fat, carbs, serving_g, barcode, ext_id, norm_name, user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL)
+       RETURNING ${PRODUCT_COLUMNS}`,
+      [
+        p.source,
+        p.name,
+        brand,
+        p.kcal,
+        p.protein,
+        p.fat,
+        p.carbs,
+        serving,
+        barcode,
+        p.extId ?? null,
+        norm,
+      ],
+    );
+    return mapProduct(rows[0]);
+  } catch (err) {
+    // Параллельный запрос успел вставить тот же внешний продукт.
+    if (p.extId && (err as { code?: string }).code === '23505') {
+      const row = await one<ProductRow>(
+        `SELECT ${PRODUCT_COLUMNS} FROM products WHERE ext_id = $1 LIMIT 1`,
+        [p.extId],
+      );
+      if (row) return mapProduct(row);
+    }
+    throw err;
+  }
 };

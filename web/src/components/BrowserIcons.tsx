@@ -25,7 +25,7 @@ export function BrowserIcon({ id, size = 20, className }: Props) {
     return (
       <img
         className={className}
-        src="/icons/yandex.svg"
+        src={`${import.meta.env.BASE_URL}icons/yandex.svg`}
         width={size}
         height={size}
         alt=""
@@ -38,7 +38,7 @@ export function BrowserIcon({ id, size = 20, className }: Props) {
     return (
       <img
         className={className}
-        src="/icons/firefox.svg"
+        src={`${import.meta.env.BASE_URL}icons/firefox.svg`}
         width={size}
         height={size}
         alt=""

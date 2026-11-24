@@ -21,6 +21,10 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
 
+  // Лендинг обслуживает только свои страницы: приложение и API не трогаем.
+  const path = new URL(req.url).pathname;
+  if (path === '/app' || path.startsWith('/app/') || path.startsWith('/api/')) return;
+
   if (req.mode === 'navigate') {
     e.respondWith(
       fetch(req).then((res) => {

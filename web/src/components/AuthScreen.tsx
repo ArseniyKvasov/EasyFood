@@ -39,7 +39,7 @@ export function AuthScreen({ error }: Props) {
           <a className="yandex-btn" href={YANDEX_SIGN_IN_URL}>
             <img
               className="yandex-btn__logo"
-              src="/icons/yandex.svg"
+              src={`${import.meta.env.BASE_URL}icons/yandex.svg`}
               width={24}
               height={24}
               alt=""
