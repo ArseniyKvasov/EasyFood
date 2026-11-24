@@ -16,7 +16,8 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    // Корень dist занимает лендинг, приложение живёт в dist/app.
+    outDir: 'dist/app',
     sourcemap: false,
     chunkSizeWarningLimit: 900,
   },

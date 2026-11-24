@@ -11,8 +11,15 @@ COPY web/package.json web/
 RUN npm ci --workspaces --include-workspace-root || npm install
 
 COPY web ./web
-# Приложение живёт на /app/, корень домена занимает лендинг.
+COPY landing ./landing
+# Приложение собирается в dist/app, лендинг занимает корень dist.
 RUN APP_BASE=/app/ npm -w web run build
+RUN cp -r landing/index.html landing/404.html landing/robots.txt landing/sitemap.xml \
+          landing/favicon.svg landing/manifest.webmanifest landing/sw.js \
+          landing/analytics.js landing/gate.js landing/config.js \
+          landing/styles.css landing/script.js \
+          landing/assets landing/calculator landing/onboarding landing/legal \
+          web/dist/
 
 # ---------- Stage 2: сборка бэкенда ----------
 FROM node:20-alpine AS api-build

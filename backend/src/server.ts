@@ -63,30 +63,29 @@ await app.register(pushRoutes);
 
 // ---------- Статика SPA ----------
 if (existsSync(staticRoot)) {
-  // Приложение живёт на /app/: корень домена занимает лендинг.
+  // Один корень: лендинг в dist/, приложение в dist/app/.
+  // Так сайт работает и за nginx, и при прямом заходе в контейнер.
   await app.register(fastifyStatic, {
     root: staticRoot,
-    prefix: '/app/',
+    prefix: '/',
     index: ['index.html'],
-    wildcard: false,
   });
+
+  const notFoundPage = join(staticRoot, '404.html');
 
   app.setNotFoundHandler(async (req, reply) => {
     if (req.url.startsWith('/api/')) {
       return reply.code(404).send({ error: 'NOT_FOUND' });
     }
 
-    // Прямой заход в контейнер, мимо nginx: приложение живёт на /app/.
-    // Без этого корень отдавал голый JSON с ошибкой.
-    if (req.url === '/' || req.url === '/index.html') {
-      return reply.redirect('/app/');
-    }
-
-    // Любой неизвестный путь внутри приложения отдаёт SPA.
+    // Неизвестный путь внутри приложения отдаёт SPA.
     if (req.url === '/app' || req.url.startsWith('/app/')) {
-      return reply.header('Cache-Control', 'no-cache').sendFile('index.html', staticRoot);
+      return reply.header('Cache-Control', 'no-cache').sendFile('app/index.html');
     }
 
+    if (existsSync(notFoundPage)) {
+      return reply.code(404).sendFile('404.html');
+    }
     return reply.code(404).send({ error: 'NOT_FOUND' });
   });
   app.log.info(`[web] serving static files from ${staticRoot}`);
