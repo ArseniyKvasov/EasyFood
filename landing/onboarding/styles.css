@@ -624,3 +624,11 @@ input{font:inherit;color:inherit}
 .gsteps .txt{font-size:12px}
 .gtip{font-size:11.5px}
 .ask__sub{font-size:12px}
+
+/* Иконка «три точки» внутри инструкции */
+.ui-dots{
+  display:inline-flex;align-items:center;justify-content:center;
+  height:18px;padding:0 5px;border-radius:5px;
+  background:#EFF3EC;color:var(--green-deep);vertical-align:-3px;margin:0 1px;
+}
+.ui-dots svg{width:14px;height:14px;fill:currentColor}

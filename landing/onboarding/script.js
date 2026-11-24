@@ -438,8 +438,8 @@
   var GUIDES = {
     ios: [
       { id: 'safari', name: 'Safari', steps: [
-        'Нажмите «Поделиться» внизу.',
-        'Нажмите три точки снизу справа.',
+        'Нажмите {dots} внизу справа.',
+        'Нажмите «Поделиться».',
         'Нажмите «Показать больше».',
         'Выберите «На экран "Домой"».',
         'Нажмите «Добавить».'
@@ -499,7 +499,10 @@
   var inst = { platform: 'ios', browser: 'safari', shown: false };
 
   function boldUi(text) {
-    return text.split(/(«[^»]*»)/g).map(function (part) {
+    return text.split(/(«[^»]*»|\{dots\})/g).map(function (part) {
+      if (part === '{dots}') {
+        return '<span class="ui-dots" aria-label="три точки"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span>';
+      }
       return part.charAt(0) === '«' ? '<b>' + part + '</b>' : part;
     }).join('');
   }

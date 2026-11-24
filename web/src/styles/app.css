@@ -1665,6 +1665,18 @@ h6 {
   font-weight: 600;
   color: var(--accent-ink);
 }
+/* Иконка кнопки внутри шага: три точки горизонтально. */
+.step__dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 6px;
+  background-color: var(--accent-soft);
+  color: var(--accent-ink);
+  vertical-align: -4px;
+}
 .install__tip {
   display: flex;
   align-items: flex-start;

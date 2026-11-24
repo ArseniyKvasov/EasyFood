@@ -131,20 +131,35 @@ function detectBrowser(platform: Platform): BrowserId {
   return GUIDES[platform][0].id;
 }
 
-/** Выделяет «названия кнопок» в шагах: так инструкция читается с одного взгляда. */
+/** Иконка «три точки» — так в шагах показываем кнопку меню Safari. */
+function IconDots() {
+  return (
+    <span className="step__dots" aria-label="три точки">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+        <circle cx="5" cy="12" r="2" fill="currentColor" />
+        <circle cx="12" cy="12" r="2" fill="currentColor" />
+        <circle cx="19" cy="12" r="2" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
+/** Выделяет «названия кнопок» и иконки в шагах: так инструкция читается с одного взгляда. */
 function StepText({ text }: { text: string }) {
-  const parts = text.split(/(«[^»]*»)/g);
+  const parts = text.split(/(«[^»]*»|\{dots\})/g);
   return (
     <>
-      {parts.map((part, i) =>
-        part.startsWith('«') ? (
-          <b key={i} className="step__ui">
-            {part}
-          </b>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
+      {parts.map((part, i) => {
+        if (part === '{dots}') return <IconDots key={i} />;
+        if (part.startsWith('«')) {
+          return (
+            <b key={i} className="step__ui">
+              {part}
+            </b>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
     </>
   );
 }
