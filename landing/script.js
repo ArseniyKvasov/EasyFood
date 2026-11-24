@@ -480,8 +480,7 @@
     if (!link) return;
     var href = link.getAttribute('href') || '';
     if (link.hasAttribute('data-lead')) return;
-    if (href.indexOf('onboarding/') === 0) track('open_prototype');
-    else if (href.indexOf('calculator/') === 0) track('open_calculator');
+    if (href.indexOf('calculator/') === 0) track('open_calculator');
     else if (href === '#demo') track('click_demo');
     else if (href === '#start') track('click_start');
   });

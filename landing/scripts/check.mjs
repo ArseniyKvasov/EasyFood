@@ -10,7 +10,6 @@ const root = resolve(process.argv[2] || new URL('..', import.meta.url).pathname)
 const pages = [
   'index.html',
   'calculator/index.html',
-  'onboarding/index.html',
   'legal/index.html',
   'legal/privacy.html',
   'legal/consent.html',
@@ -18,7 +17,7 @@ const pages = [
 ];
 
 /* Ссылки на внешние приложения этого же домена: /app/ живёт в другом проекте */
-const EXTERNAL = ['/app/'];
+const EXTERNAL = ['/app/', '/api/'];
 
 const problems = [];
 const rel = (p) => p.replace(root + '/', '');

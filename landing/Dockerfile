@@ -6,7 +6,6 @@ WORKDIR /usr/share/nginx/html
 COPY index.html 404.html robots.txt sitemap.xml favicon.svg ./
 COPY styles.css script.js ./
 COPY assets ./assets
-COPY onboarding ./onboarding
 COPY legal ./legal
 
 EXPOSE 80

@@ -12,6 +12,7 @@ import { ProductPicker } from './components/ProductPicker';
 import { GramsSheet } from './components/GramsSheet';
 import { ProductEditor } from './components/ProductEditor';
 import { SettingsSheet } from './components/SettingsSheet';
+import { Onboarding } from './components/Onboarding';
 import { Sheet } from './components/Sheet';
 import { AuthScreen } from './components/AuthScreen';
 import { InstallBanner } from './components/InstallBanner';
@@ -641,6 +642,18 @@ export default function App() {
 
         <InstallBanner onOpen={() => push({ kind: 'install' })} />
       </main>
+
+      {/* Первый запуск: пока знакомство не пройдено, показываем вопросы поверх приложения. */}
+      {settings && !settings.onboarded && (
+        <Onboarding
+          onDone={async (targets) => {
+            const next = await api.updateSettings({ ...targets, onboarded: true });
+            setSettings(next);
+            pushToast('Норма сохранена');
+            void load(date, false);
+          }}
+        />
+      )}
 
       {top && (
         <>
