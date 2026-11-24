@@ -75,10 +75,18 @@ if (existsSync(staticRoot)) {
     if (req.url.startsWith('/api/')) {
       return reply.code(404).send({ error: 'NOT_FOUND' });
     }
+
+    // Прямой заход в контейнер, мимо nginx: приложение живёт на /app/.
+    // Без этого корень отдавал голый JSON с ошибкой.
+    if (req.url === '/' || req.url === '/index.html') {
+      return reply.redirect('/app/');
+    }
+
     // Любой неизвестный путь внутри приложения отдаёт SPA.
     if (req.url === '/app' || req.url.startsWith('/app/')) {
       return reply.header('Cache-Control', 'no-cache').sendFile('index.html', staticRoot);
     }
+
     return reply.code(404).send({ error: 'NOT_FOUND' });
   });
   app.log.info(`[web] serving static files from ${staticRoot}`);
