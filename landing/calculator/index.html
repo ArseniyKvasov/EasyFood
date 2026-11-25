@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Калькулятор нормы калорий и БЖУ - BiteBalance</title>
+<meta name="description" content="Рассчитайте дневную норму калорий, белков, жиров и углеводов по формуле Миффлина-Сан Жеора.">
+<link rel="canonical" href="https://bitebalance.ru/calculator/">
+<meta property="og:title" content="Калькулятор нормы калорий - BiteBalance">
+<meta property="og:description" content="Норма калорий и БЖУ за минуту. По формуле Миффлина-Сан Жеора.">
+<meta property="og:image" content="https://bitebalance.ru/assets/og.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<meta name="theme-color" content="#FAF6EF">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=20261126">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Калькулятор нормы калорий BiteBalance",
+  "applicationCategory": "HealthApplication",
+  "operatingSystem": "Web",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "RUB" }
+}
+</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="../index.html"><img src="../favicon.svg" alt="" width="26" height="26">BiteBalance</a>
+  <a class="back" href="../index.html">На главную</a>
+</header>
+
+<main class="page">
+  <h1>Калькулятор нормы<br>калорий и БЖУ</h1>
+  <p class="lead">Посчитайте, сколько нужно есть, чтобы держать вес, худеть или набирать. Формула Миффлина-Сан Жеора, та же, что используется в дневнике BiteBalance.</p>
+
+  <div class="grid">
+    <form class="card form" id="calcForm" novalidate>
+      <div class="group">
+        <span class="label">Пол</span>
+        <div class="seg" id="sex" role="group" aria-label="Пол">
+          <button type="button" data-sex="f" class="is-on">Женский</button>
+          <button type="button" data-sex="m">Мужской</button>
+        </div>
+      </div>
+
+      <div class="row2">
+        <label class="field"><span>Возраст</span><input id="age" type="number" inputmode="numeric" max="120" placeholder="29"><i>лет</i></label>
+        <label class="field"><span>Рост</span><input id="height" type="number" inputmode="numeric" max="220" placeholder="168"><i>см</i></label>
+      </div>
+
+      <label class="field"><span>Вес</span><input id="weight" type="number" inputmode="numeric" max="250" placeholder="62"><i>кг</i></label>
+
+      <div class="group">
+        <span class="label">Активность</span>
+        <div class="chips" id="activity" role="group" aria-label="Активность">
+          <button type="button" data-act="1.2">Сидячая</button>
+          <button type="button" data-act="1.375" class="is-on">1-2 тренировки</button>
+          <button type="button" data-act="1.55">3-5 тренировок</button>
+          <button type="button" data-act="1.725">Каждый день</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="label">Цель</span>
+        <div class="chips" id="goal" role="group" aria-label="Цель">
+          <button type="button" data-goal="lose">Похудеть</button>
+          <button type="button" data-goal="keep" class="is-on">Держать вес</button>
+          <button type="button" data-goal="gain">Набрать</button>
+        </div>
+      </div>
+    </form>
+
+    <aside class="card result" aria-live="polite">
+      <span class="label">Ваша норма</span>
+      <div class="kcal"><b id="kcal">1 880</b><span>ккал в день</span></div>
+      <div class="macros">
+        <div class="mrow"><span>Белки</span><b id="p">105 г</b></div>
+        <div class="mrow"><span>Жиры</span><b id="f">56 г</b></div>
+        <div class="mrow"><span>Углеводы</span><b id="c">212 г</b></div>
+      </div>
+      <p class="note" id="note">Расчёт для поддержания веса при активности 1-2 тренировки в неделю.</p>
+      <a class="btn" href="../onboarding/">Посмотреть, как это в дневнике</a>
+      <button class="btn btn--ghost" type="button" id="leadBtn">Получить доступ</button>
+    </aside>
+  </div>
+
+  <section class="explain">
+    <h2>Как считается</h2>
+    <p>Сначала базовый обмен по формуле Миффлина-Сан Жеора: 10 × вес + 6,25 × рост − 5 × возраст. Для женщин вычитается 161, для мужчин прибавляется 5. Дальше результат умножается на коэффициент активности: 1,2 для сидячей, 1,375 для одной-двух тренировок, 1,55 для трёх-пяти, 1,725 для ежедневных.</p>
+    <p>Цель меняет итог: минус 15% для похудения, плюс 10% для набора. Ниже 1 200 ккал для женщин и 1 500 для мужчин калькулятор не опускается. Белки считаются как 1,7 г на килограмм веса, жиры - 0,9 г, углеводы получаются остатком калорий.</p>
+    <p class="disclaimer">Это оценка, а не медицинская рекомендация. При заболеваниях, беременности и расстройствах пищевого поведения расчёт нужно согласовать с врачом.</p>
+  </section>
+
+  <section class="cta">
+    <div>
+      <h2>Норма есть. Дальше - дневник</h2>
+      <p>Сфотографируйте тарелку, и BiteBalance посчитает КБЖУ сам. Бесплатно, без рекламы.</p>
+    </div>
+    <a class="btn btn--big" href="../index.html#pricing">Открыть BiteBalance</a>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>© <span id="year">2026</span> BiteBalance · ИП Квасов А. О.</span>
+  <a href="../legal/privacy.html">Политика</a>
+  <a href="../legal/offer.html">Оферта</a>
+</footer>
+
+<script src="../analytics.js"></script>
+<script src="../config.js"></script>
+<script src="calc.js?v=20261126"></script>
+</body>
+</html>

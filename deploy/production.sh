@@ -1328,12 +1328,6 @@ if ((BACKUP)); then
   log "бэкап: $backup_file ($(du -h "$backup_file" 2>/dev/null | cut -f1 || true))"
 fi
 
-# ---------- Лендинг ----------
-# landing/ — копия BiteBalance (в git не входит). Обновляем до сборки образа.
-run_step "синхронизируем лендинг из BiteBalance" \
-  "укажите путь: BITEBALANCE_DIR=/path/to/BiteBalance $0" \
-  "$APP_DIR/deploy/sync-landing.sh"
-
 # ---------- Сборка ----------
 
 run_step "собираем образ $IMAGE" \

@@ -1,7 +1,5 @@
 node_modules/
 dist/
-# Лендинг — копия BiteBalance (см. deploy/sync-landing.sh), в git не входит.
-/landing/
 *.tsbuildinfo
 .env
 .env.local

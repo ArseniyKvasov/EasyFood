@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Замените bitebalance.ru на рабочий домен перед публикацией -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://bitebalance.ru/</loc><changefreq>monthly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://bitebalance.ru/calculator/</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://bitebalance.ru/onboarding/</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://bitebalance.ru/legal/</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://bitebalance.ru/legal/privacy.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bitebalance.ru/legal/consent.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://bitebalance.ru/legal/offer.html</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>
