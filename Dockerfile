@@ -11,6 +11,7 @@ COPY web/package.json web/
 RUN npm ci --workspaces --include-workspace-root || npm install
 
 COPY web ./web
+# landing/ в git не входит: его синхронизирует deploy/sync-landing.sh из BiteBalance.
 COPY landing ./landing
 # Приложение собирается в dist/app, лендинг занимает корень dist.
 RUN APP_BASE=/app/ npm -w web run build
