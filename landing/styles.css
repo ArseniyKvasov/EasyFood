@@ -525,6 +525,12 @@ section[id],[id="top"]{scroll-margin-top:92px}
   .mobilebar{display:block}
   .consent{padding:14px}
   .consent p{font-size:.8rem}
+  /* Пока нет нижней кнопки входа — бейдж cookie прижат к самому низу */
+  body.has-consent .consent{
+    left:0;right:0;bottom:0;border-radius:18px 18px 0 0;
+    border-left:0;border-right:0;border-bottom:0;
+    padding-bottom:calc(14px + env(safe-area-inset-bottom));
+  }
   .footer{padding-bottom:96px}
 }
 @media (max-width:720px){

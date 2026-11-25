@@ -1,5 +1,5 @@
 import { formatDaySubtitle, formatDayTitle } from '../lib/date';
-import { IconChevronLeft, IconChevronRight, IconLeaf, IconMoon, IconSettings, IconSun } from './Icons';
+import { IconChart, IconChevronLeft, IconChevronRight, IconLeaf, IconMoon, IconSettings, IconSun } from './Icons';
 
 type Props = {
   date: string;
@@ -9,9 +9,10 @@ type Props = {
   onOpenCalendar: () => void;
   onTheme: () => void;
   onSettings: () => void;
+  onTrends: () => void;
 };
 
-export function Header({ date, theme, onPrev, onNext, onOpenCalendar, onTheme, onSettings }: Props) {
+export function Header({ date, theme, onPrev, onNext, onOpenCalendar, onTheme, onSettings, onTrends }: Props) {
   return (
     <header className="topbar">
       <div className="container-xxl">
@@ -52,6 +53,9 @@ export function Header({ date, theme, onPrev, onNext, onOpenCalendar, onTheme, o
               title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
             >
               {theme === 'dark' ? <IconSun /> : <IconMoon />}
+            </button>
+            <button className="icon-btn" onClick={onTrends} aria-label="Тренды и экспорт" title="Тренды и экспорт (Plus)">
+              <IconChart />
             </button>
             <button className="icon-btn" onClick={onSettings} aria-label="Настройки">
               <IconSettings />

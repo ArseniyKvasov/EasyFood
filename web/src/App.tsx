@@ -13,6 +13,7 @@ import { GramsSheet } from './components/GramsSheet';
 import { ProductEditor } from './components/ProductEditor';
 import { SettingsSheet } from './components/SettingsSheet';
 import { PaywallSheet, type PaywallMode } from './components/PaywallSheet';
+import { TrendsSheet } from './components/TrendsSheet';
 import { Onboarding } from './components/Onboarding';
 import { Sheet } from './components/Sheet';
 import { AuthScreen } from './components/AuthScreen';
@@ -24,6 +25,7 @@ import { IconRefresh } from './components/Icons';
 
 type SheetState =
   | { kind: 'paywall'; mode: PaywallMode }
+  | { kind: 'trends' }
   | { kind: 'picker'; meal: MealId }
   | { kind: 'grams'; product: Product; entryId: number | null; grams: number; meal: MealId }
   | { kind: 'editor'; product: Product | null; prefill: ProductPrefill }
@@ -447,6 +449,14 @@ export default function App() {
       );
     }
 
+    if (top.kind === 'trends') {
+      return (
+        <Sheet title="Тренды" onClose={closeAll}>
+          <TrendsSheet onPaywall={() => push({ kind: 'paywall', mode: 'feature' })} />
+        </Sheet>
+      );
+    }
+
     if (top.kind === 'picker') {
       return (
         <Sheet title={`Добавить в «${MEAL_NAMES[top.meal]}»`} onClose={closeAll}>
@@ -607,6 +617,7 @@ export default function App() {
         onOpenCalendar={() => push({ kind: 'calendar' })}
         onTheme={toggleTheme}
         onSettings={() => push({ kind: 'settings' })}
+        onTrends={() => push({ kind: 'trends' })}
       />
 
       <main className="main container-xxl">

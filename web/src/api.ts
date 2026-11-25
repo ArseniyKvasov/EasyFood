@@ -174,4 +174,60 @@ export const api = {
 
   syncBilling: () =>
     request<{ ok: true; status: string }>('/api/billing/sync', { method: 'POST' }),
+
+  // --- Тренды и экспорт (Plus) ---
+  trends: (days: number) =>
+    request<{
+      from: string;
+      to: string;
+      days: { day: string; entries: number; kcal: number; protein: number; fat: number; carbs: number }[];
+      targets: { kcal: number; protein: number; fat: number; carbs: number };
+      summary: {
+        activeDays: number;
+        totalDays: number;
+        avgKcal: number;
+        avgProtein: number;
+        avgFat: number;
+        avgCarbs: number;
+        streak: number;
+        inNormDays: number;
+        overDays: number;
+      };
+    }>(`/api/trends?days=${days}`),
+
+  diaryRange: (from: string, to: string) =>
+    request<{
+      from: string;
+      to: string;
+      entries: { day: string; meal: string; name: string; grams: string; kcal: string; protein: string; fat: string; carbs: string }[];
+    }>(`/api/diary/range?from=${from}&to=${to}`),
+
+  exportCsv: async (from: string, to: string): Promise<void> => {
+    const res = await fetch(`/api/export.csv?from=${from}&to=${to}`, {
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      let code = 'ERROR';
+      let message = `Ошибка ${res.status}`;
+      try {
+        const data = (await res.json()) as { error?: string; message?: string };
+        code = data.error ?? code;
+        message = data.message ?? message;
+      } catch {
+        /* не JSON */
+      }
+      throw new ApiError(res.status, code, message);
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = /filename="([^"]+)"/.exec(cd);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = m ? m[1] : 'bitebalance.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  },
 };
