@@ -25,7 +25,7 @@ export const searchLocal = async (q: string, userId: number, limit = 30): Promis
 
   const rows = await query<ProductRow>(
     `SELECT ${PRODUCT_COLUMNS} FROM products
-      WHERE (user_id IS NULL OR user_id = $2)
+      WHERE COALESCE(is_hidden, FALSE) = FALSE AND (user_id IS NULL OR user_id = $2)
         AND (
           norm_name LIKE $1 || '%'
           OR name ILIKE '%' || $3 || '%'

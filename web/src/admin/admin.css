@@ -1,0 +1,23 @@
+.admin { min-height: 100vh; background: #f4f5f7; }
+.admin-stat { text-align: center; padding: 12px 8px; }
+.admin-stat-value { font-size: 1.6rem; font-weight: 700; }
+.admin-stat-label { font-size: 0.8rem; color: #6c757d; }
+.admin-bars { display: flex; align-items: flex-end; gap: 4px; min-height: 130px; overflow-x: auto; }
+.admin-bar { display: flex; flex-direction: column; align-items: center; min-width: 26px; }
+.admin-bar-fill { width: 18px; background: #2f6b4f; border-radius: 3px 3px 0 0; }
+.admin-bar-day { font-size: 0.62rem; color: #6c757d; margin-top: 2px; }
+.admin-minibars { display: flex; align-items: flex-end; gap: 3px; }
+.admin-minibar-fill { width: 14px; background: #7fb08c; border-radius: 2px 2px 0 0; }
+.admin-loading { padding: 24px; color: #6c757d; }
+.fn-scroll { overflow-x: auto; }
+.fn-labels, .fn-figures { display: grid; }
+.fn-label { font-size: 0.8rem; font-weight: 600; padding: 0 8px 6px 0; }
+.fn-cell { padding: 6px 8px 0 0; }
+.fn-count { font-size: 1.25rem; display: block; }
+.fn-share { font-size: 0.8rem; color: #6c757d; }
+.fn-share b { color: #212529; }
+.fn-block { fill: #2f6b4f; }
+.fn-link { fill: #dce9e2; }
+.fn-filter { border: 1px solid #dee2e6; border-radius: 8px; padding: 8px 10px; background: #fff; }
+.fn-filter-title { font-size: 0.78rem; font-weight: 700; color: #6c757d; text-transform: uppercase; margin-bottom: 4px; }
+.fn-check { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.88rem; cursor: pointer; }

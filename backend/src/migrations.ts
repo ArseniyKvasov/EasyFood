@@ -246,6 +246,101 @@ const migrations: Migration[] = [
         ON product_queries (hits DESC, last_seen DESC);
     `,
   },
+  {
+    id: '009_admin',
+    sql: `
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_reason TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_until TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS note TEXT NOT NULL DEFAULT '';
+
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT FALSE;
+      CREATE INDEX IF NOT EXISTS products_hidden_idx ON products (is_hidden) WHERE is_hidden = TRUE;
+
+      CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id          BIGSERIAL PRIMARY KEY,
+        admin_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+        action      TEXT NOT NULL,
+        target_type TEXT NOT NULL DEFAULT '',
+        target_id   TEXT NOT NULL DEFAULT '',
+        details     JSONB NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS admin_audit_log_created_idx ON admin_audit_log (created_at DESC);
+      CREATE INDEX IF NOT EXISTS admin_audit_log_admin_idx ON admin_audit_log (admin_id);
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key        TEXT PRIMARY KEY,
+        value      JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_by BIGINT REFERENCES users(id) ON DELETE SET NULL
+      );
+      INSERT INTO app_settings (key, value) VALUES
+        ('ai_free_monthly', '30'),
+        ('ai_plus_daily', '50'),
+        ('maintenance_mode', 'false'),
+        ('support_banner', '""')
+      ON CONFLICT (key) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS ai_requests (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    BIGINT REFERENCES users(id) ON DELETE SET NULL,
+        kind       TEXT NOT NULL DEFAULT 'photo',
+        success    BOOLEAN NOT NULL DEFAULT TRUE,
+        latency_ms INTEGER NOT NULL DEFAULT 0,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS ai_requests_created_idx ON ai_requests (created_at DESC);
+      CREATE INDEX IF NOT EXISTS ai_requests_user_idx ON ai_requests (user_id);
+    `,
+  },
+  {
+    id: '010_funnel',
+    sql: `
+      -- Воронка: когорта строится по дате регистрации, шаги — по дневнику и ИИ.
+      CREATE INDEX IF NOT EXISTS users_created_idx ON users (created_at DESC);
+      CREATE INDEX IF NOT EXISTS users_plan_idx ON users (plan);
+    `,
+  },
+  {
+    id: '011_billing',
+    sql: `
+      -- Подписки Plus и платежи через Т-Банк (см. docs/payments.md).
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        user_id            BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        plan               TEXT NOT NULL CHECK (plan IN ('month', 'year')),
+        status             TEXT NOT NULL DEFAULT 'active',
+        rebill_id          TEXT,
+        started_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+        current_end        TIMESTAMPTZ NOT NULL,
+        cancel_at          TIMESTAMPTZ,
+        dunning_attempts   INTEGER NOT NULL DEFAULT 0,
+        dunning_next_try   TIMESTAMPTZ,
+        precharge_notified_at TIMESTAMPTZ,
+        updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS payments (
+        id          BIGSERIAL PRIMARY KEY,
+        user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        order_id    TEXT NOT NULL UNIQUE,
+        payment_id  TEXT UNIQUE,
+        rebill_id   TEXT,
+        amount      INTEGER NOT NULL,
+        plan        TEXT NOT NULL,
+        kind        TEXT NOT NULL DEFAULT 'initial',
+        status      TEXT NOT NULL DEFAULT 'pending',
+        receipt_url TEXT NOT NULL DEFAULT '',
+        raw         JSONB NOT NULL DEFAULT '{}',
+        created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        paid_at     TIMESTAMPTZ
+      );
+      CREATE INDEX IF NOT EXISTS payments_user_idx ON payments (user_id);
+      CREATE INDEX IF NOT EXISTS payments_status_idx ON payments (status);
+      CREATE INDEX IF NOT EXISTS payments_order_idx ON payments (order_id);
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

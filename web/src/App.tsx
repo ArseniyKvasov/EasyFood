@@ -12,6 +12,7 @@ import { ProductPicker } from './components/ProductPicker';
 import { GramsSheet } from './components/GramsSheet';
 import { ProductEditor } from './components/ProductEditor';
 import { SettingsSheet } from './components/SettingsSheet';
+import { PaywallSheet, type PaywallMode } from './components/PaywallSheet';
 import { Onboarding } from './components/Onboarding';
 import { Sheet } from './components/Sheet';
 import { AuthScreen } from './components/AuthScreen';
@@ -22,6 +23,7 @@ import { ToastHost, type ToastItem } from './components/Toast';
 import { IconRefresh } from './components/Icons';
 
 type SheetState =
+  | { kind: 'paywall'; mode: PaywallMode }
   | { kind: 'picker'; meal: MealId }
   | { kind: 'grams'; product: Product; entryId: number | null; grams: number; meal: MealId }
   | { kind: 'editor'; product: Product | null; prefill: ProductPrefill }
@@ -46,6 +48,20 @@ type ProductPrefill = {
  * не удался. Читаем код один раз при загрузке модуля и сразу чистим адрес,
  * чтобы ошибка не всплывала после перезагрузки страницы.
  */
+const initialPayment = (() => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('payment');
+  if (!code) return null;
+  params.delete('payment');
+  const query = params.toString();
+  window.history.replaceState(
+    {},
+    '',
+    `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`,
+  );
+  return code;
+})();
+
 const initialAuthError = (() => {
   const params = new URLSearchParams(window.location.search);
   const code = params.get('auth_error');
@@ -184,6 +200,19 @@ export default function App() {
     if (!user) return;
     void load(date);
   }, [date, load, user]);
+
+  // Возврат из банка после оплаты: показываем итог и сверяемся с сервером.
+  const paymentSeen = useRef(false);
+  useEffect(() => {
+    if (!authChecked || !user || paymentSeen.current || !initialPayment) return;
+    paymentSeen.current = true;
+    if (initialPayment === 'success') {
+      pushToast('Оплата прошла, Plus активен.');
+      void api.syncBilling().catch(() => undefined);
+    } else if (initialPayment === 'fail') {
+      pushToast('Оплата не удалась. Попробуйте ещё раз или напишите в поддержку.');
+    }
+  }, [authChecked, user, pushToast]);
 
   // Подхватываем тему с сервера, только пока пользователь её не менял сам.
   useEffect(() => {
@@ -410,6 +439,14 @@ export default function App() {
       );
     }
 
+    if (top.kind === 'paywall') {
+      return (
+        <Sheet title="BiteBalance Plus" onClose={closeAll}>
+          <PaywallSheet mode={top.mode} />
+        </Sheet>
+      );
+    }
+
     if (top.kind === 'picker') {
       return (
         <Sheet title={`Добавить в «${MEAL_NAMES[top.meal]}»`} onClose={closeAll}>
@@ -417,6 +454,7 @@ export default function App() {
             meal={top.meal}
             mealName={MEAL_NAMES[top.meal]}
             refreshToken={productVersion}
+            onQuota={() => push({ kind: 'paywall', mode: 'quota' })}
             onPick={(p) => {
               // Perek отдаёт КБЖУ сразу вместе с результатом поиска.
               push({
@@ -519,6 +557,7 @@ export default function App() {
           settings={settings ?? { ...targets, theme: 'auto', onboarded: false }}
           user={user}
           onLogout={() => void logout()}
+          onPaywall={() => push({ kind: 'paywall', mode: 'plan' })}
           onSaved={(s) => {
             setSettings(s);
             themeChanged.current = true;

@@ -12,7 +12,8 @@ const localDate = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /**
- * Чистит историю дневника: записи старше retentionDays дней удаляются.
+ * Чистит историю дневника: записи старше retentionDays дней удаляются
+ * только у бесплатных пользователей. У Plus история безлимитна.
  * Возвращает количество удалённых строк.
  */
 export async function runRetention(
@@ -21,8 +22,19 @@ export async function runRetention(
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
   const rows = await query<{ id: string }>(
-    `DELETE FROM entries WHERE day < $1::date RETURNING id`,
-    [localDate(cutoff)],
+    `DELETE FROM entries WHERE day < $1::date
+       AND NOT EXISTS (
+         SELECT 1 FROM subscriptions s
+          WHERE s.user_id = entries.user_id
+            AND s.status = ANY ($2) AND s.current_end > now()
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM users u
+          WHERE u.id = entries.user_id AND u.plan = 'plus'
+            AND (u.plan_until IS NULL OR u.plan_until > now())
+       )
+     RETURNING id`,
+    [localDate(cutoff), ['active', 'past_due', 'canceled']],
   );
   return rows.length;
 }

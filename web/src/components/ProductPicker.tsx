@@ -29,6 +29,8 @@ type Props = {
   refreshToken: number;
   onPick: (product: Product) => void;
   onCreate: (prefill: { name?: string; barcode?: string }) => void;
+  /** Лимит распознаваний исчерпан: открываем пейволл вместо ошибки. */
+  onQuota?: () => void;
 };
 
 type CardProps = {
@@ -87,6 +89,7 @@ export function ProductPicker({
   refreshToken,
   onPick,
   onCreate,
+  onQuota,
 }: Props) {
   const [tab, setTab] = useState<Tab>('search');
   const [query, setQuery] = useState('');
@@ -208,6 +211,10 @@ export function ProductPicker({
       const result = await api.recognize({ image, note: note.trim() || undefined });
       setPhotoState((s) => ({ ...s, result }));
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'QUOTA_EXCEEDED') {
+        onQuota?.();
+        return;
+      }
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
       setRecognizing(false);
@@ -223,6 +230,10 @@ export function ProductPicker({
       const result = await api.recognizeByText(text);
       setTextState((s) => ({ ...s, result }));
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'QUOTA_EXCEEDED') {
+        onQuota?.();
+        return;
+      }
       setAiError(err instanceof ApiError ? err.message : 'Распознавание не удалось.');
     } finally {
       setRecognizing(false);

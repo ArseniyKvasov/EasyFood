@@ -101,6 +101,53 @@ export const config = {
     /** Как часто чистить историю, часов. */
     retentionIntervalHours: num(process.env.RETENTION_INTERVAL_HOURS, 6),
   },
+  tbank: {
+    /** Терминал эквайринга Т-Банка. Пусто — оплата выключена (checkout отвечает 503). */
+    terminalKey: (process.env.TBANK_TERMINAL_KEY ?? '').trim(),
+    password: (process.env.TBANK_PASSWORD ?? '').trim(),
+    baseUrl: (process.env.TBANK_BASE_URL ?? 'https://securepay.tinkoff.ru/v2').replace(/\/+$/, ''),
+    /** Куда вернуть после оплаты / неуспеха. Пусто — поля не отправляем. */
+    successUrl: (process.env.TBANK_SUCCESS_URL ?? '').trim(),
+    failUrl: (process.env.TBANK_FAIL_URL ?? '').trim(),
+    /** Куда Т-Банк шлёт вебхуки. Пусто — собираем из SITE_URL. */
+    notificationUrl: (process.env.TBANK_NOTIFICATION_URL ?? '').trim(),
+    siteUrl: (process.env.SITE_URL ?? '').trim().replace(/\/+$/, ''),
+    /** Налогообложение для чеков 54-ФЗ: usn_income (6%) по умолчанию. */
+    taxation: (process.env.TBANK_TAXATION ?? 'usn_income').trim(),
+    companyEmail: (process.env.TBANK_COMPANY_EMAIL ?? '').trim(),
+  },
+  billing: {
+    /** Цены в копейках: 299 ₽/мес и 1990 ₽/год. */
+    monthPrice: num(process.env.BILLING_MONTH_PRICE, 29900),
+    yearPrice: num(process.env.BILLING_YEAR_PRICE, 199000),
+    /** За сколько дней предупреждаем о списании (требует оферта). */
+    prechargeDays: num(process.env.BILLING_PRECHARGE_DAYS, 3),
+    /** Паузы dunning-повторов после неудачного списания, часов. */
+    dunningDelaysHours: (process.env.BILLING_DUNNING_HOURS ?? '24,72')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0),
+    /** Как часто тикает планировщик подписок, минут. */
+    tickMinutes: num(process.env.BILLING_TICK_MINUTES, 60),
+  },
+  mail: {
+    host: (process.env.SMTP_HOST ?? '').trim(),
+    port: num(process.env.SMTP_PORT, 587),
+    secure: bool(process.env.SMTP_SECURE, false),
+    user: (process.env.SMTP_USER ?? '').trim(),
+    pass: process.env.SMTP_PASS ?? '',
+    from: (process.env.SMTP_FROM ?? '').trim(),
+  },
+  rateLimit: {
+    /** Выключить все лимиты: RATE_LIMIT_ENABLED=0 (для отладки). */
+    enabled: bool(process.env.RATE_LIMIT_ENABLED, true),
+    /** Все /api/*: запросов в минуту с одного IP. */
+    generalPerMin: num(process.env.RATE_LIMIT_GENERAL_PER_MIN, 300),
+    /** Распознавание: запросов в минуту с одного пользователя. */
+    aiPerMin: num(process.env.RATE_LIMIT_AI_PER_MIN, 30),
+    /** Админка: запросов в минуту с одного пользователя. */
+    adminPerMin: num(process.env.RATE_LIMIT_ADMIN_PER_MIN, 120),
+  },
 };
 
 export const aiEnabled = () => config.ai.apiKey.length > 0;
@@ -115,3 +162,31 @@ export const yandexEnabled = () =>
 /** Заданы ли ключи VAPID — без них Web Push не работает. */
 export const pushEnabled = () =>
   config.push.publicKey.length > 0 && config.push.privateKey.length > 0;
+
+/**
+ * Админка: логины Яндекс ID через запятую, которые считаются суперадминами
+ * даже пока в БД у них role='user'. Нужно для первичного входа:
+ * задайте ADMIN_LOGINS, зайдите, дальше роли раздаются из интерфейса.
+ */
+const adminLogins = (process.env.ADMIN_LOGINS ?? '')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+export const isBootstrapAdmin = (login: string): boolean =>
+  adminLogins.includes(login.trim().toLowerCase());
+
+/** Заданы ли ключи терминала — без них checkout недоступен. */
+export const tbankEnabled = (): boolean =>
+  config.tbank.terminalKey.length > 0 && config.tbank.password.length > 0;
+
+/** Настроена ли отправка писем. */
+export const mailEnabled = (): boolean =>
+  config.mail.host.length > 0 && config.mail.from.length > 0;
+
+/** Куда Т-Банк шлёт вебхуки: явный URL или SITE_URL + путь. */
+export const tbankNotificationUrl = (): string => {
+  if (config.tbank.notificationUrl) return config.tbank.notificationUrl;
+  if (config.tbank.siteUrl) return config.tbank.siteUrl + '/api/billing/notify';
+  return '';
+};

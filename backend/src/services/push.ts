@@ -103,6 +103,37 @@ export async function sendReminder(): Promise<{ sent: number; removed: number }>
   return { sent, removed };
 }
 
+/** Точечный push одному пользователю (биллинг и т.п.). Без подписок — тихо ничего. */
+export async function sendPushToUser(
+  userId: number,
+  note: { title: string; body: string; url?: string },
+): Promise<number> {
+  if (!ensureVapid()) return 0;
+  const subs = await query<StoredSubscription>(
+    'SELECT id::text AS id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1',
+    [userId],
+  );
+  const payload = JSON.stringify({ title: note.title, body: note.body, url: note.url ?? '/' });
+  let sent = 0;
+  for (const sub of subs) {
+    try {
+      await sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload,
+      );
+      sent += 1;
+    } catch (err) {
+      const status = (err as { statusCode?: number }).statusCode;
+      if (status === 404 || status === 410) {
+        await query('DELETE FROM push_subscriptions WHERE id = $1', [sub.id]).catch(
+          () => undefined,
+        );
+      }
+    }
+  }
+  return sent;
+}
+
 /** Ближайшее время напоминания в UTC. */
 export const nextSlot = (now: Date = new Date()): Date => {
   const candidates = SLOTS.map(([hour, minute]) => {

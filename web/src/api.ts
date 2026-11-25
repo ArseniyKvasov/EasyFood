@@ -148,4 +148,30 @@ export const api = {
 
   recognizeByText: (description: string) =>
     request<Recognition>('/api/recognize/text', json({ description })),
+
+  // --- Подписка Plus ---
+  billingStatus: () =>
+    request<{
+      plus: boolean;
+      plan: string;
+      status: string | null;
+      current_end: string | null;
+      cancel_at: string | null;
+      has_rebill: boolean;
+      email: string;
+      quota: { plus: boolean; limit: number; used: number; period: string };
+      prices: { month: number; year: number };
+      tbank: boolean;
+    }>('/api/billing/status'),
+
+  checkout: (plan: 'month' | 'year') =>
+    request<{ paymentUrl: string; orderId: string }>('/api/checkout', json({ plan })),
+
+  cancelSubscription: () =>
+    request<{ ok: true; current_end: string | null }>('/api/billing/cancel', {
+      method: 'POST',
+    }),
+
+  syncBilling: () =>
+    request<{ ok: true; status: string }>('/api/billing/sync', { method: 'POST' }),
 };

@@ -190,3 +190,10 @@ export const IconLogout = ({ size = 17, ...p }: IconProps) => (
     <path d="M21 12H9" />
   </svg>
 );
+
+export const IconMail = ({ size = 17, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <rect x="2.5" y="4.5" width="19" height="15" rx="2.5" />
+    <path d="m3.5 7 8.5 6 8.5-6" />
+  </svg>
+);

@@ -7,12 +7,17 @@ import { config } from './config.js';
 import { migrate } from './migrations.js';
 import { pool } from './db.js';
 import { authHook } from './middleware/auth.js';
+import { rateLimitHook, userRateLimitHook } from './middleware/rateLimit.js';
+import { adminRoutes } from './routes/admin.js';
+import { funnelRoutes } from './routes/funnel.js';
 import { authRoutes } from './routes/auth.js';
+import { paymentsAuthRoutes, paymentsPublicRoutes } from './routes/payments.js';
 import { diaryRoutes } from './routes/diary.js';
 import { productRoutes } from './routes/products.js';
 import { pushRoutes } from './routes/push.js';
 import { recognizeRoutes } from './routes/recognize.js';
 import { settingsRoutes } from './routes/settings.js';
+import { startBillingScheduler } from './services/billing.js';
 import { runRetention } from './services/maintenance.js';
 import { startPushScheduler } from './services/push.js';
 
@@ -52,12 +57,18 @@ app.setErrorHandler((err: FastifyError, req, reply) => {
 
 app.get('/api/health', async () => ({ ok: true, version: '1.0.0' }));
 
+await rateLimitHook(app);
 await app.register(authRoutes);
+await app.register(paymentsPublicRoutes);
 await authHook(app);
+await userRateLimitHook(app);
 
 await app.register(diaryRoutes);
 await app.register(productRoutes);
 await app.register(settingsRoutes);
+await app.register(adminRoutes);
+await app.register(funnelRoutes);
+await app.register(paymentsAuthRoutes);
 await app.register(recognizeRoutes);
 await app.register(pushRoutes);
 
@@ -114,13 +125,19 @@ async function start(): Promise<void> {
 
   // Напоминания в 7:00, 13:00, 17:00 и 20:30 МСК.
   stopPush = startPushScheduler();
+
+  // Подписки: предуведомления, рекурренты, dunning.
+  stopBilling = startBillingScheduler();
+  app.log.info('[billing] scheduler started');
 }
 
 let stopPush: () => void = () => undefined;
+let stopBilling: () => void = () => undefined;
 
 const shutdown = async (signal: string) => {
   app.log.info(`${signal} received, shutting down`);
   stopPush();
+  stopBilling();
   await app.close();
   await pool.end();
   process.exit(0);

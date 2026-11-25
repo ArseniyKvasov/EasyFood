@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { pool } from '../db.js';
 import { findSession, parseCookies } from '../services/auth.js';
 
 /** Эндпоинты, доступные без сессии. */
@@ -7,6 +8,8 @@ const PUBLIC_PATHS = new Set([
   '/api/auth/logout',
   '/api/auth/yandex/start',
   '/api/auth/yandex/callback',
+  // Вебхук Т-Банка: у банка нет сессии, подлинность — по подписи Token.
+  '/api/billing/notify',
 ]);
 
 /**
@@ -34,6 +37,13 @@ export async function authHook(app: FastifyInstance): Promise<void> {
     if (!user) {
       return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'Сессия истекла, войдите снова' });
     }
+
+    try {
+      const r = await pool.query('SELECT is_blocked FROM users WHERE id = $1', [user.id]);
+      if (r.rows[0]?.is_blocked && !path.startsWith('/api/admin/')) {
+        return reply.code(403).send({ error: 'BLOCKED', message: 'Аккаунт заблокирован' });
+      }
+    } catch { /* таблица users всегда есть */ }
 
     req.user = user;
   });
