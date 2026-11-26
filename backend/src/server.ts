@@ -82,6 +82,20 @@ if (existsSync(staticRoot)) {
     root: staticRoot,
     prefix: '/',
     index: ['index.html'],
+    /**
+     * Хэш в имени (name.ab12cd34.js, vite-ассеты) — immutable на год.
+     * HTML и sw.js — всегда свежие: входные точки и обновления воркера.
+     * Остальное (robots.txt, sitemap.xml, иконки без хэша) — без кэша.
+     */
+    setHeaders: (res, path) => {
+      if (/[-.][0-9A-Za-z]{8}\.[a-z0-9]+$/.test(path)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (path.endsWith('.html') || path.endsWith('/sw.js')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      } else {
+        res.setHeader('Cache-Control', 'no-store');
+      }
+    },
   });
 
   const notFoundPage = join(staticRoot, '404.html');

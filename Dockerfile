@@ -14,12 +14,16 @@ COPY web ./web
 COPY landing ./landing
 # Приложение собирается в dist/app, лендинг занимает корень dist.
 RUN APP_BASE=/app/ npm -w web run build
+# Статика лендинга получает контент-хэш в имени (scripts/hash-static.mjs),
+# поэтому любой деплой сразу виден всем: имена файлов меняются.
+RUN node landing/scripts/hash-static.mjs ./landing
 # Копируем лендинг целиком и сразу убираем то, что в образе не нужно:
 # так список файлов не придётся править при каждом изменении сайта.
 RUN cp -r landing/. web/dist/ \
  && rm -rf web/dist/preview web/dist/docs web/dist/scripts web/dist/deploy \
            web/dist/Dockerfile web/dist/package.json web/dist/README.md \
-           web/dist/.github web/dist/.dockerignore web/dist/.gitignore
+           web/dist/.github web/dist/.dockerignore web/dist/.gitignore \
+ && node landing/scripts/hash-static.mjs ./web/dist
 
 # ---------- Stage 2: сборка бэкенда ----------
 FROM node:20-alpine AS api-build
