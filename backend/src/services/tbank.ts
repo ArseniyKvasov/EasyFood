@@ -52,7 +52,15 @@ async function call(method: string, params: Json): Promise<Json> {
       signal: AbortSignal.timeout(20000),
     });
   } catch (err) {
-    throw new TbankError('NETWORK', 'Т-Банк недоступен: ' + (err as Error).message);
+    // fetch failed сам по себе ничего не объясняет: достаём код причины
+    // (ENOTFOUND / ECONNREFUSED / ETIMEDOUT / CERT_*) и адрес, куда шли.
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+    const code = cause?.code || 'NETWORK';
+    const detail = cause?.message || (err as Error).message;
+    throw new TbankError(
+      code,
+      'Т-Банк недоступен (' + config.tbank.baseUrl + '): ' + code + ' — ' + detail,
+    );
   }
   let data: Json;
   try {

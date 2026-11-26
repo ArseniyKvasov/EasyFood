@@ -176,6 +176,15 @@ curl -s -b "bb_session=<токен админа>" https://<домен>/api/admin
 - **Неверный `TBANK_BASE_URL`.** Для боевого терминала `https://securepay.tinkoff.ru/v2`,
   для тестового — тот же адрес, но ключи из тестового кабинета. Ошибка Init пишется в лог
   как `[billing] Init в Т-Банке не прошёл` с кодом и суммой.
+- **Контейнер не видит интернет.** Тогда в логе `fetch failed` с кодом причины:
+  `ENOTFOUND` — не резолвится DNS, `ECONNREFUSED`/`ETIMEDOUT` — трафик режется фаерволом
+  или провайдером, `CERT_*` — подмена сертификата на прокси. Проверка из контейнера:
+
+  ```bash
+  docker compose exec app-blue node -e "fetch('https://securepay.tinkoff.ru/v2/Init',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>console.log('HTTP',r.status)).catch(e=>console.log('ERR',e.cause?.code||e.message))"
+  ```
+
+  `HTTP 4xx` — сеть в порядке, дело в ключах; `ERR ...` — сеть или DNS.
 
 ## Локальная разработка
 
