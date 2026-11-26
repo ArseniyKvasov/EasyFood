@@ -15,7 +15,7 @@
   function fmt(n) { return Math.round(n).toLocaleString('ru-RU'); }
   function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-  /** Пустое или нелепое значение — null, верхнего предела достаточно. */
+  /** Пустое или нелепое значение - null, верхнего предела достаточно. */
   function numOrNull(input, max) {
     var v = parseFloat(String(input.value).replace(',', '.'));
     if (!isFinite(v) || v <= 0) return null;
@@ -40,7 +40,7 @@
       el.p.textContent = '\u2014';
       el.f.textContent = '\u2014';
       el.c.textContent = '\u2014';
-      el.note.textContent = 'Заполните возраст, рост и вес — посчитаем вашу норму.';
+      el.note.textContent = 'Заполните возраст, рост и вес - посчитаем вашу норму.';
       return;
     }
     var r = calc();

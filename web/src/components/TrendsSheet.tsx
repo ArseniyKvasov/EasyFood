@@ -28,7 +28,7 @@ const shortDay = (iso: string): string => iso.slice(8, 10) + '.' + iso.slice(5, 
 const longDay = (iso: string): string => iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4);
 
 /**
- * Наблюдает за самим скроллером: его ширина — база для масштаба графика.
+ * Наблюдает за самим скроллером: его ширина - база для масштаба графика.
  * Один источник правды: и ширина, и позиция скролла обновляются на каждый
  * ресайз, поэтому график не «прыгает» при первом открытии шторки.
  */
@@ -55,7 +55,7 @@ function useScroller(): [React.RefObject<HTMLDivElement | null>, number, () => v
   return [ref, width, toEnd];
 }
 
-/** Столбики по дням с линией нормы. Ширина — по контейнеру, много дней скроллится. */
+/** Столбики по дням с линией нормы. Ширина - по контейнеру, много дней скроллится. */
 function Chart(props: { data: Trends; metric: Metric }) {
   const { data, metric } = props;
   const [scrollRef, boxWidth, scrollToEnd] = useScroller();
@@ -82,9 +82,9 @@ function Chart(props: { data: Trends; metric: Metric }) {
   const showTick = (i: number): boolean =>
     i === lastIndex || (i % tickEvery === 0 && lastIndex - i >= tickEvery * 0.6);
 
-  // При 60–90 днях график шире экрана: показываем свежие дни, а не пустое начало.
+  // При 60-90 днях график шире экрана: показываем свежие дни, а не пустое начало.
   // SVG получает ширину не в тот же кадр, что контейнер, поэтому доводим
-  // позицию несколько кадров подряд — иначе скролл остаётся в начале.
+  // позицию несколько кадров подряд - иначе скролл остаётся в начале.
   useEffect(() => {
     let frame = 0;
     let raf = 0;
@@ -280,7 +280,7 @@ export function TrendsSheet({ onPaywall }: Props) {
           </span>
           <p className="tr__empty-title">За этот период записей нет</p>
           <p className="tr__empty-text">
-            Добавьте приём пищи в дневник — и здесь появятся графики, средние и серия дней.
+            Добавьте приём пищи в дневник - и здесь появятся графики, средние и серия дней.
           </p>
         </div>
       )}
@@ -311,7 +311,7 @@ export function TrendsSheet({ onPaywall }: Props) {
             <div className="tr__card-head">
               <span className="bb-label">{current.name}</span>
               <span className="tr__card-meta">
-                {shortDay(data.from)} — {longDay(data.to)}
+                {shortDay(data.from)} - {longDay(data.to)}
               </span>
             </div>
             <nav className="segmented segmented--sm" aria-label="Показатель">

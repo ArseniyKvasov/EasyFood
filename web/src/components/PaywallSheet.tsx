@@ -16,15 +16,15 @@ const TITLES: Record<PaywallMode, string> = {
 };
 
 const DESCS: Record<PaywallMode, string> = {
-  quota: 'Бесплатные распознавания на этот период закончились. С Plus — до 50 фото в день.',
+  quota: 'Бесплатные распознавания на этот период закончились. С Plus - до 50 фото в день.',
   feature: 'Эта возможность доступна только с подпиской Plus.',
-  plan: 'Больше фото, история без срока — и поддержка развития сервиса.',
+  plan: 'Больше фото, история без срока - и поддержка развития сервиса.',
 };
 
 const PERKS: string[] = [
   'До 50 распознаваний по фото в день',
   'История дневника без ограничения 60 дней',
-  'Отмена в один клик, доступ — до конца оплаченного периода',
+  'Отмена в один клик, доступ - до конца оплаченного периода',
 ];
 
 export function PaywallSheet({ mode }: Props) {
@@ -66,7 +66,6 @@ export function PaywallSheet({ mode }: Props) {
 
   return (
     <div className="paywall">
-      <p className="bb-label">BiteBalance Plus</p>
       <h3 className="paywall__title">{TITLES[mode]}</h3>
       <p className="paywall__desc">{DESCS[mode]}</p>
       <ul className="paywall__list">
@@ -82,7 +81,7 @@ export function PaywallSheet({ mode }: Props) {
         })}
       </ul>
       {status && status.plus && (
-        <p className="paywall__active">Plus уже активен — приятного аппетита.</p>
+        <p className="paywall__active">Plus уже активен - приятного аппетита.</p>
       )}
       {error && <div className="alert alert-danger">{error}</div>}
       <div className="d-grid gap-2">

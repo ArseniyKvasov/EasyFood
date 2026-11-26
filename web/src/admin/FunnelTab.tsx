@@ -30,7 +30,7 @@ const shiftIso = (base: string, days: number): string => {
 
 const num = (v: unknown): string => Number(v || 0).toLocaleString('ru-RU');
 const pct = (v: unknown): string => {
-  if (v === null || v === undefined) return '—';
+  if (v === null || v === undefined) return '-';
   return String(v).replace('.', ',') + '%';
 };
 
@@ -115,7 +115,7 @@ function FunnelSvg(props: { steps: Step[] }) {
               <div key={s.key} className="fn-cell">
                 <strong className="fn-count">{num(s.count)}</strong>
                 <span className="fn-share">
-                  <b>{i === 0 ? (s.count ? '100%' : '—') : pct(s.rate_first)}</b>
+                  <b>{i === 0 ? (s.count ? '100%' : '-') : pct(s.rate_first)}</b>
                   {i > 0 && !s.independent && s.rate_prev !== null && <span> · {pct(s.rate_prev)} от пред.</span>}
                 </span>
               </div>
@@ -227,7 +227,7 @@ export default function FunnelTab() {
             <div className="col-6 col-md-3"><div className="card admin-stat"><div className="admin-stat-value">{num(s.push_on)}</div><div className="admin-stat-label">С push · {pct(s.push_share)}</div></div></div>
           </div>
           <div className="card p-3">
-            <h6>Когорта {data.period.from} — {data.period.to}: от регистрации к привычке</h6>
+            <h6>Когорта {data.period.from} - {data.period.to}: от регистрации к привычке</h6>
             {data.funnel.total === 0
               ? <div className="text-muted">В этом периоде регистраций нет</div>
               : <FunnelSvg steps={data.funnel.steps} />}

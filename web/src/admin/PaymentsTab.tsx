@@ -66,7 +66,7 @@ export default function PaymentsTab() {
                   <td>{str(s.plan)}</td>
                   <td><span className="badge bg-secondary">{str(s.status)}</span>{s.has_rebill ? '' : ' (без ребилла)'}</td>
                   <td className="small">{str(s.current_end).slice(0, 10)}</td>
-                  <td className="small">{s.cancel_at ? str(s.cancel_at).slice(0, 10) : '—'}</td>
+                  <td className="small">{s.cancel_at ? str(s.cancel_at).slice(0, 10) : '-'}</td>
                   <td className="text-end"><button className="btn btn-sm btn-outline-secondary" onClick={function () { cancel(Number(s.user_id)); }}>Отменить продление</button></td>
                 </tr>
               );

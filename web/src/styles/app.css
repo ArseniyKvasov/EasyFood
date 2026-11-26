@@ -1,5 +1,5 @@
 /* ==========================================================================
-   BiteBalance — компоненты на базе Bootstrap 5.3
+   BiteBalance - компоненты на базе Bootstrap 5.3
    ========================================================================== */
 
 body {
@@ -14,7 +14,7 @@ body {
 }
 
 /* Bootstrap сбрасывает часть стилей, но оформление обычных <button>
-   (серая заливка и «выступающая» рамка) остаётся браузерным — убираем его. */
+   (серая заливка и «выступающая» рамка) остаётся браузерным - убираем его. */
 button {
   background-color: transparent;
   border: 0;
@@ -768,7 +768,7 @@ h6 {
     display: flex;
     align-items: flex-end;
   }
-  /* Пока модалка не показана — уезжает вниз. Селектор с :not(.show)
+  /* Пока модалка не показана - уезжает вниз. Селектор с :not(.show)
      иначе перебивал бы transform:none из .modal.show (одинаковая специфичность). */
   .modal.fade:not(.show) .modal-dialog {
     transform: translateY(100%);
@@ -794,7 +794,7 @@ h6 {
 .segmented {
   --bs-nav-pills-link-active-color: var(--text);
   --bs-nav-pills-link-active-bg: var(--surface);
-  /* Четыре вкладки не всегда помещаются — прокручиваем по горизонтали */
+  /* Четыре вкладки не всегда помещаются - прокручиваем по горизонтали */
   display: flex;
   gap: 0.2rem;
   padding: 0.25rem;
@@ -946,7 +946,7 @@ h6 {
   display: block;
   background: #0a0f0a;
 }
-/* Поток остался вертикальным, а телефон повёрнут — разворачиваем картинку
+/* Поток остался вертикальным, а телефон повёрнут - разворачиваем картинку
    и меняем местами размеры, чтобы она заполнила рамку. */
 .scanner.is-rotated video {
   position: absolute;
@@ -1120,7 +1120,7 @@ h6 {
   font-weight: 700;
   padding: 0.6rem;
 }
-/* Свои кнопки ± уже есть — штатные стрелки браузера только мешают. */
+/* Свои кнопки ± уже есть - штатные стрелки браузера только мешают. */
 .grams-input input[type='number'] {
   appearance: textfield;
   -moz-appearance: textfield;
@@ -1624,7 +1624,7 @@ h6 {
 .step:last-child {
   padding-bottom: 0;
 }
-/* Линия между шагами — от кружка к кружку. */
+/* Линия между шагами - от кружка к кружку. */
 .step:not(:last-child)::before {
   content: '';
   position: absolute;
@@ -1650,7 +1650,7 @@ h6 {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-/* Последний шаг — то самое «Добавить»: подсвечиваем финиш. */
+/* Последний шаг - то самое «Добавить»: подсвечиваем финиш. */
 .step:last-child .step__num {
   border-color: var(--accent);
   background-color: var(--accent);
@@ -1947,7 +1947,6 @@ h6 {
 .onb__foot .btn { min-height: 48px; }
 
 /* ---------- Пейволл ---------- */
-.paywall .bb-label { margin-bottom: 0.35rem; }
 .paywall__title {
   font-family: Montserrat, sans-serif;
   font-weight: 800;

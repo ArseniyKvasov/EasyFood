@@ -275,7 +275,7 @@ export function SettingsSheet({ settings, user, onLogout, onSaved, onPaywall }: 
         <span className="bb-label">Помощь</span>
         <a
           className="btn btn-outline-secondary w-100 mt-2"
-          href={`mailto:${SUPPORT_EMAIL}?subject=BiteBalance — вопрос в поддержку`}
+          href={`mailto:${SUPPORT_EMAIL}?subject=BiteBalance - вопрос в поддержку`}
         >
           <IconMail size={17} />
           Написать в поддержку

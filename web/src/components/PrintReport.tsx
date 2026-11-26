@@ -63,10 +63,10 @@ export default function PrintReport() {
   return (
     <div className="print-doc">
       <div className="no-print print-bar">
-        <span>BiteBalance · отчёт {p.from} — {p.to}</span>
+        <span>BiteBalance · отчёт {p.from} - {p.to}</span>
         <button type="button" onClick={function () { window.print(); }}>Печать / сохранить PDF</button>
       </div>
-      <h1>Дневник питания {p.from} — {p.to}</h1>
+      <h1>Дневник питания {p.from} - {p.to}</h1>
       <table className="print-table">
         <tbody>
           <tr><th>Активных дней</th><td>{trends.summary.activeDays} из {trends.summary.totalDays}</td></tr>
@@ -79,7 +79,7 @@ export default function PrintReport() {
       {trends.days.filter(function (d) { return d.entries > 0; }).map(function (d) {
         return (
           <section key={d.day} className="print-day">
-            <h2>{d.day} — {num(d.kcal)} ккал (Б {num(d.protein)} · Ж {num(d.fat)} · У {num(d.carbs)})</h2>
+            <h2>{d.day} - {num(d.kcal)} ккал (Б {num(d.protein)} · Ж {num(d.fat)} · У {num(d.carbs)})</h2>
             <table className="print-table">
               <thead><tr><th>Приём</th><th>Продукт</th><th>Граммы</th><th>Ккал</th></tr></thead>
               <tbody>
