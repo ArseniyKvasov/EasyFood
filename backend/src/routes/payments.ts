@@ -1,7 +1,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { tbankEnabled, tbankNotificationUrl } from '../config.js';
+import { billingIssues, tbankEnabled } from '../config.js';
 import { one, query } from '../db.js';
 import {
   activateSubscription,
@@ -111,12 +111,16 @@ export async function paymentsAuthRoutes(app: FastifyInstance): Promise<void> {
 
   /** Создать платёж и получить ссылку на страницу банка. Сумма — только с сервера. */
   app.post('/api/checkout', async (req, reply) => {
-    if (!tbankEnabled()) {
-      return reply.code(503).send({ error: 'BILLING_DISABLED', message: 'Оплата временно недоступна' });
-    }
-    const notifyUrl = tbankNotificationUrl();
-    if (!notifyUrl) {
-      return reply.code(503).send({ error: 'BILLING_DISABLED', message: 'Оплата не настроена' });
+    const issues = billingIssues();
+    if (issues.length) {
+      // Главная причина «оплата не работает»: не хватает переменных окружения.
+      // Пишем это явно в лог, чтобы было видно в docker compose logs.
+      req.log.error('[billing] checkout отклонён: ' + issues.join('; '));
+      return reply.code(503).send({
+        error: 'BILLING_DISABLED',
+        message: 'Оплата временно недоступна',
+        issues: issues,
+      });
     }
     const parsed = checkoutBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'VALIDATION', issues: parsed.error.issues });
@@ -148,7 +152,10 @@ export async function paymentsAuthRoutes(app: FastifyInstance): Promise<void> {
       return { paymentUrl: init.paymentUrl, orderId: oid };
     } catch (err) {
       await query("UPDATE payments SET status = 'failed' WHERE id = $1", [rowId]);
-      req.log.error({ err: err }, '[billing] init failed');
+      req.log.error(
+        { err: err, orderId: oid, userId: userId, plan: plan, amount: amount },
+        '[billing] Init в Т-Банке не прошёл — платёж не создан',
+      );
       return reply.code(502).send({
         error: 'INIT_FAILED',
         message: 'Банк отклонил создание платежа. Попробуйте позже или напишите в поддержку.',
@@ -177,7 +184,10 @@ export async function paymentsAuthRoutes(app: FastifyInstance): Promise<void> {
 
   /** Ручная сверка: если вебхук потерялся, подтянуть статус из банка. */
   app.post('/api/billing/sync', async (req, reply) => {
-    if (!tbankEnabled()) return reply.code(503).send({ error: 'BILLING_DISABLED' });
+    if (!tbankEnabled()) {
+      req.log.error('[billing] sync недоступен: ' + billingIssues().join('; '));
+      return reply.code(503).send({ error: 'BILLING_DISABLED' });
+    }
     const userId = req.user!.id;
     const last = await one<PaymentRow>(
       "SELECT id::text AS id, user_id::text AS user_id, order_id, payment_id, amount::text AS amount, plan, kind, status FROM payments WHERE user_id = $1 AND payment_id IS NOT NULL AND status IN ('pending', 'failed') ORDER BY id DESC LIMIT 1",

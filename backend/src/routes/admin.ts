@@ -5,7 +5,7 @@ import { normalizeName } from '../lib/text.js';
 import { requireAdmin, requireEditor, requireStaff } from '../middleware/admin.js';
 import { revokeSubscription } from '../services/billing.js';
 import { cancelPayment } from '../services/tbank.js';
-import { tbankEnabled } from '../config.js';
+import { billingIssues, config, mailEnabled, tbankEnabled, tbankNotificationUrl } from '../config.js';
 async function audit(adminId: number, action: string, targetType: string, targetId: string, details: unknown): Promise<void> {
   try {
     await query('INSERT INTO admin_audit_log (admin_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)', [adminId, action, targetType, targetId, JSON.stringify(details ?? {})]);
@@ -157,6 +157,22 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---------- Платежи и подписки ----------
+  /** Состояние интеграции: чего не хватает, чтобы принимать оплату. */
+  app.get('/api/admin/billing/config', { preHandler: requireAdmin }, async () => {
+    const issues = billingIssues();
+    return {
+      ready: issues.length === 0,
+      issues: issues,
+      terminalKey: config.tbank.terminalKey ? config.tbank.terminalKey.slice(0, 6) + '…' : '',
+      baseUrl: config.tbank.baseUrl,
+      notificationUrl: tbankNotificationUrl(),
+      successUrl: config.tbank.successUrl,
+      failUrl: config.tbank.failUrl,
+      mail: mailEnabled(),
+      prices: { month: config.billing.monthPrice, year: config.billing.yearPrice },
+    };
+  });
+
   app.get('/api/admin/payments', { preHandler: requireStaff }, async (req) => {
     const status = String((req.query as { status?: string }).status ?? 'all');
     const limit = Math.min(100, Math.max(1, Number((req.query as { limit?: string }).limit ?? 30)));

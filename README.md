@@ -149,6 +149,34 @@ YANDEX_SCOPE=login:info login:email
 | `BACKUP_DIR` | `data/backups` | Папка для дампов базы (в Docker — том `backups`) |
 | `BACKUP_KEEP_DAYS` | `14` | Сколько дней хранить дампы |
 
+## Если оплата не работает
+
+`POST /api/checkout` отвечает `503 BILLING_DISABLED`, когда не хватает настроек. Причина
+всегда видна в логе контейнера:
+
+```bash
+docker compose logs app-blue | grep billing
+# {"level":50,...,"msg":"[billing] ОПЛАТА ВЫКЛЮЧЕНА: TBANK_TERMINAL_KEY не задан; TBANK_PASSWORD не задан. ..."}
+```
+
+Проверить то же самое без логов можно под админом:
+
+```bash
+curl -s -b "bb_session=<токен админа>" https://<домен>/api/admin/billing/config
+# {"ready":false,"issues":["TBANK_TERMINAL_KEY не задан"],"notificationUrl":"..."}
+```
+
+Частые причины:
+
+- **Переменные не доехали до контейнера.** `docker-compose.yml` передаёт `TBANK_*` и
+  `SITE_URL` из `.env`; после правки compose нужен `docker compose up -d --build`,
+  перезапуска контейнера мало.
+- **Пустой `SITE_URL`.** Из него собирается адрес вебхука
+  (`<SITE_URL>/api/billing/notify`). Можно задать `TBANK_NOTIFICATION_URL` напрямую.
+- **Неверный `TBANK_BASE_URL`.** Для боевого терминала `https://securepay.tinkoff.ru/v2`,
+  для тестового — тот же адрес, но ключи из тестового кабинета. Ошибка Init пишется в лог
+  как `[billing] Init в Т-Банке не прошёл` с кодом и суммой.
+
 ## Локальная разработка
 
 ```bash

@@ -1,4 +1,14 @@
-import 'dotenv/config';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { config as loadEnv } from 'dotenv';
+
+// Скрипты воркспейса backend запускаются из backend/, а .env лежит в корне
+// проекта — рядом с .env.example. Явный путь делает одинаковым поведение
+// в dev, в тестах и в собранном dist. Уже заданные переменные окружения
+// dotenv не перезаписывает, поэтому в контейнере приоритет у compose.
+const rootEnv = resolve(dirname(fileURLToPath(import.meta.url)), '../../.env');
+if (existsSync(rootEnv)) loadEnv({ path: rootEnv });
 
 const num = (v: string | undefined, fallback: number) => {
   const n = Number(v);
@@ -189,4 +199,19 @@ export const tbankNotificationUrl = (): string => {
   if (config.tbank.notificationUrl) return config.tbank.notificationUrl;
   if (config.tbank.siteUrl) return config.tbank.siteUrl + '/api/billing/notify';
   return '';
+};
+
+/**
+ * Чего не хватает для приёма оплаты — списком, человеческим языком.
+ * Пустой массив означает «всё настроено». Этим пользуются checkout, лог
+ * при старте и админка: одна функция, один текст ошибки.
+ */
+export const billingIssues = (): string[] => {
+  const issues: string[] = [];
+  if (!config.tbank.terminalKey) issues.push('TBANK_TERMINAL_KEY не задан');
+  if (!config.tbank.password) issues.push('TBANK_PASSWORD не задан');
+  if (!config.tbank.siteUrl && !config.tbank.notificationUrl) {
+    issues.push('не задан SITE_URL (или TBANK_NOTIFICATION_URL) — банку некуда отправлять вебхук');
+  }
+  return issues;
 };

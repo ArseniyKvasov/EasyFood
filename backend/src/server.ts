@@ -3,7 +3,7 @@ import fastifyStatic from '@fastify/static';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config } from './config.js';
+import { billingIssues, config, mailEnabled, tbankNotificationUrl } from './config.js';
 import { migrate } from './migrations.js';
 import { pool } from './db.js';
 import { authHook } from './middleware/auth.js';
@@ -49,7 +49,12 @@ if (config.corsOrigin.length) {
 
 app.setErrorHandler((err: FastifyError, req, reply) => {
   const statusCode = err.statusCode ?? 500;
-  if (statusCode >= 500) req.log.error({ err }, 'request failed');
+  // В логах сразу видно, что и где упало: метод, путь и текст ошибки.
+  if (statusCode >= 500) {
+    req.log.error({ err: err, method: req.method, url: req.url }, 'ошибка ' + statusCode + ' на ' + req.method + ' ' + req.url + ': ' + err.message);
+  } else {
+    req.log.warn({ method: req.method, url: req.url }, statusCode + ' ' + req.method + ' ' + req.url + ': ' + err.message);
+  }
   reply.code(statusCode).send({
     error: err.name === 'FastifyError' ? 'BAD_REQUEST' : 'INTERNAL',
     message: err.message,
@@ -126,7 +131,9 @@ async function start(): Promise<void> {
     process.exit(1);
   }
   await app.listen({ port: config.port, host: '0.0.0.0' });
-  app.log.info(`BiteBalance API on http://0.0.0.0:${config.port}`);
+  app.log.info(
+    `BiteBalance API on http://0.0.0.0:${config.port} — режим ${config.nodeEnv}, логи ${process.env.LOG_LEVEL ?? 'info'}`,
+  );
   if (!config.perek.apiKey) {
     app.log.warn('PEREK_API_KEY не задан: поиск работает по своей базе, штрихкоды — через Open Food Facts');
   }
@@ -144,7 +151,19 @@ async function start(): Promise<void> {
 
   // Подписки: предуведомления, рекурренты, dunning.
   stopBilling = startBillingScheduler();
-  app.log.info('[billing] scheduler started');
+
+  // Диагностика оплаты одной строкой: сразу видно, чего не хватает.
+  const billingProblems = billingIssues();
+  if (billingProblems.length) {
+    app.log.error(
+      '[billing] ОПЛАТА ВЫКЛЮЧЕНА: ' + billingProblems.join('; ') + '. Checkout отвечает 503, вебхуки не придут.',
+    );
+  } else {
+    app.log.info('[billing] терминал Т-Банка настроен, вебхук: ' + tbankNotificationUrl());
+  }
+  if (!mailEnabled()) {
+    app.log.warn('[billing] SMTP не настроен: письма о списаниях, возвратах и чеках не отправляются');
+  }
 }
 
 let stopPush: () => void = () => undefined;
