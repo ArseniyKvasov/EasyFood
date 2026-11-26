@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Сертификаты, скопированные с сервера во время деплоя (см. certs/README.md)
+certs/russian-server/
 *.tsbuildinfo
 .env
 .env.local

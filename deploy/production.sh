@@ -1328,6 +1328,43 @@ if ((BACKUP)); then
   log "бэкап: $backup_file ($(du -h "$backup_file" 2>/dev/null | cut -f1 || true))"
 fi
 
+# ---------- Место на диске ----------
+# Деплой съедает место: образы, миграции, логи, дампы. Порог превышен -
+# один проход чистки, затем повторная проверка; не помогло - стоп до сборки.
+run_step "проверяем свободное место" \
+  "освободите диск или поднимите порог MEMORY_GUARD_THRESHOLD_PERCENT" \
+  "$APP_DIR/deploy/check-memory.sh"
+
+# ---------- Российские корневые сертификаты ----------
+# Т-Банк и часть гос-API подписаны корнями Минцифры; в стандартном наборе
+# Node их нет (симптом: fetch failed / SELF_SIGNED_CERT_IN_CHAIN).
+# Сертификаты кладём в образ при сборке: certs/russian (в git) и
+# certs/russian-server (копия с сервера, в git не входит).
+RUSSIAN_CA_SERVER_DIR="${BITEBALANCE_RUSSIAN_CA_DIR:-/etc/bitebalance/russian-ca}"
+RUSSIAN_CA_LOCAL_DIR="$APP_DIR/certs/russian-server"
+RUSSIAN_CA_COUNT=0
+
+if compgen -G "$RUSSIAN_CA_SERVER_DIR/*.crt" >/dev/null 2>&1 \
+   || compgen -G "$RUSSIAN_CA_SERVER_DIR/*.pem" >/dev/null 2>&1; then
+  rm -rf "$RUSSIAN_CA_LOCAL_DIR"
+  mkdir -p "$RUSSIAN_CA_LOCAL_DIR"
+  cp "$RUSSIAN_CA_SERVER_DIR"/*.crt "$RUSSIAN_CA_SERVER_DIR"/*.pem "$RUSSIAN_CA_LOCAL_DIR"/ 2>/dev/null || true
+  log "сертификаты с сервера: $RUSSIAN_CA_SERVER_DIR"
+fi
+
+for dir in "$APP_DIR/certs/russian" "$RUSSIAN_CA_LOCAL_DIR"; do
+  [[ -d "$dir" ]] || continue
+  for cert in "$dir"/*.crt "$dir"/*.pem; do
+    [[ -f "$cert" ]] || continue
+    if ! openssl x509 -noout -in "$cert" >/dev/null 2>&1; then
+      die "$cert не PEM-сертификат" \
+        "DER переводится так: openssl x509 -inform DER -in file.cer -out file.crt"
+    fi
+    RUSSIAN_CA_COUNT=$((RUSSIAN_CA_COUNT + 1))
+  done
+done
+log "российских корневых сертификатов: $RUSSIAN_CA_COUNT (собираются в образ)"
+
 # ---------- Сборка ----------
 
 run_step "собираем образ $IMAGE" \
@@ -1381,6 +1418,35 @@ if ! wait_http "http://$HEALTH_HOST:$CAND_PORT/api/health" 60 2; then
     "проверьте вручную: docker compose exec app-$CAND_SLOT wget -qO- http://127.0.0.1:3000/api/health"
 fi
 log "кандидат отвечает"
+
+# ---------- TLS до эквайринга ----------
+# Проверяем реальный хендшейк из кандидата, пока трафик ещё не переключён.
+# Ответ банка любой (даже 4xx) означает, что сеть и сертификаты в порядке.
+if [[ -n "$(cfg TBANK_TERMINAL_KEY '')" ]]; then
+  TBANK_URL_CHECK="$(cfg TBANK_BASE_URL 'https://securepay.tinkoff.ru/v2')"
+  log "проверяем TLS до $TBANK_URL_CHECK из кандидата"
+  if ! docker exec "$cand_id" node -e '
+const url = process.argv[1];
+fetch(url + "/Init", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: "{}",
+  signal: AbortSignal.timeout(15000),
+})
+  .then(function (r) { console.log("HTTP " + r.status); process.exit(0); })
+  .catch(function (e) {
+    console.log("ERR " + ((e.cause && (e.cause.code || e.cause.message)) || e.message));
+    process.exit(1);
+  });
+' "$TBANK_URL_CHECK"; then
+    show_logs "app-$CAND_SLOT" 20
+    die "кандидат не может установить TLS с $TBANK_URL_CHECK" \
+      "SELF_SIGNED_CERT_IN_CHAIN - нужен российский корневой сертификат: положите .crt в certs/russian/ или в /etc/bitebalance/russian-ca/ и повторите деплой" \
+      "ENOTFOUND/ETIMEDOUT - проверьте DNS и фаервол: ./deploy/check-billing.sh app-$CAND_SLOT" \
+      "старый слот app-$ACTIVE_SLOT продолжает работать, трафик не переключался"
+  fi
+  log "TLS до банка в порядке"
+fi
 
 # ---------- Переключение трафика ----------
 

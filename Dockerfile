@@ -57,6 +57,21 @@ RUN npm cache clean --force
 COPY --from=api-build /app/backend/dist ./backend/dist
 COPY --from=web-build /app/web/dist ./web/dist
 
+# Российские корневые сертификаты: Node по умолчанию доверяет только
+# стандартному набору, а Т-Банк и часть гос-API подписаны корнями Минцифры.
+# NODE_EXTRA_CA_CERTS дополняет системный бандл, а не заменяет его.
+COPY certs ./certs
+RUN set -e; \
+    cat /etc/ssl/certs/ca-certificates.crt > /app/certs/ca-bundle.pem; \
+    for f in /app/certs/russian/*.crt /app/certs/russian-server/*.crt; do \
+      if [ -f "$f" ]; then \
+        printf '\n' >> /app/certs/ca-bundle.pem; \
+        cat "$f" >> /app/certs/ca-bundle.pem; \
+      fi; \
+    done; \
+    chmod -R a+rX /app/certs
+ENV NODE_EXTRA_CA_CERTS=/app/certs/ca-bundle.pem
+
 # Файлы из рабочей папки могут прийти с режимом 600 — процессу под app
 # они должны быть доступны на чтение.
 RUN chmod -R a+rX /app/web/dist /app/backend/dist
