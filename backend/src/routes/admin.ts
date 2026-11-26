@@ -170,8 +170,12 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       failUrl: config.tbank.failUrl,
       mail: mailEnabled(),
       prices: { month: config.billing.monthPrice, year: config.billing.yearPrice },
+      // Длины, а не значения: сразу видно обрезанный пароль.
+      terminalKeyLength: config.tbank.terminalKey.length,
+      passwordLength: config.tbank.password.length,
     };
   });
+
 
   app.get('/api/admin/payments', { preHandler: requireStaff }, async (req) => {
     const status = String((req.query as { status?: string }).status ?? 'all');

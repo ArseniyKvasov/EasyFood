@@ -10,23 +10,37 @@ import { config, tbankNotificationUrl } from '../config.js';
 
 export class TbankError extends Error {
   code: string;
+  /** Полный ответ банка — для логов и поддержки. */
+  response?: Record<string, unknown>;
   constructor(code: string, message: string) {
     super(message);
     this.code = code;
   }
 }
 
-/** Подпись запроса или вебхука. Поле Token само в подпись не входит. */
+/**
+ * Подпись запроса или вебхука.
+ *
+ * Пароль терминала — такое же поле конкатенации, как и остальные, и участвует
+ * в сортировке: «Password» стоит между «OrderId» и «PayType», а не в самом
+ * конце. Иначе подпись не сходится и банк отвечает 204 «Неверный токен».
+ * Вложенные объекты (Receipt, DATA) и сам Token в подпись не входят.
+ */
 export function sign(params: Record<string, unknown>, password: string): string {
-  const keys = Object.keys(params).filter(function (k) { return k !== 'Token'; }).sort();
-  let raw = '';
-  for (const k of keys) {
+  const payload: Record<string, unknown> = {};
+  for (const k of Object.keys(params)) {
+    if (k === 'Token') continue;
     const v = params[k];
     if (v === null || v === undefined) continue;
     if (typeof v === 'object') continue;
-    raw += String(v);
+    payload[k] = v;
   }
-  return createHash('sha256').update(raw + password).digest('hex');
+  payload.Password = password;
+  const raw = Object.keys(payload)
+    .sort()
+    .map(function (k) { return String(payload[k]); })
+    .join('');
+  return createHash('sha256').update(raw).digest('hex');
 }
 
 export function verifyWebhook(body: Record<string, unknown>): boolean {
@@ -69,7 +83,13 @@ async function call(method: string, params: Json): Promise<Json> {
     throw new TbankError('BAD_RESPONSE', 'Т-Банк вернул не JSON');
   }
   if (data.Success !== true) {
-    throw new TbankError(String(data.ErrorCode || 'FAILED'), String(data.Message || data.Details || 'Операция отклонена банком'));
+    // Details от банка часто указывает конкретное поле — кладём его в текст,
+    // а весь ответ сохраняем, чтобы было что показать поддержке.
+    const message = String(data.Message || 'Операция отклонена банком');
+    const details = data.Details ? String(data.Details) : '';
+    const err = new TbankError(String(data.ErrorCode || 'FAILED'), details ? message + ' (' + details + ')' : message);
+    (err as TbankError & { response?: Json }).response = data;
+    throw err;
   }
   return data;
 }
@@ -90,9 +110,17 @@ const receipt = (email: string, name: string, amount: number): Json => ({
   ],
 });
 
-export type InitResult = { paymentUrl: string; paymentId: string };
+export type InitResult = { paymentUrl: string; paymentId: string; variant: string };
 
-/** Первый платёж подписки: одностадийный, с Recurrent=Y чтобы получить RebillId. */
+/**
+ * Первый платёж подписки: одностадийный, с Recurrent=Y чтобы получить RebillId.
+ *
+ * Банк отвечает 204 «Неверные параметры», когда терминал не принимает
+ * какое-то необязательное поле: чек 54-ФЗ, Recurrent, DATA. Вместо того чтобы
+ * гадать, какие опции включены у конкретного магазина, пробуем наборы по
+ * убыванию: сначала полный, затем без чека, без рекуррента и минимальный.
+ * Успешный вариант пишем в лог — по нему видно, на чём терминал остановился.
+ */
 export async function initPayment(input: {
   amount: number;
   orderId: string;
@@ -102,24 +130,58 @@ export async function initPayment(input: {
   plan: string;
   userId: number;
 }): Promise<InitResult> {
-  const params: Json = {
+  const common: Json = {
     Amount: input.amount,
     OrderId: input.orderId,
     Description: input.description,
     PayType: 'O',
+    NotificationURL: notificationUrl(),
+  };
+  if (config.tbank.successUrl) common.SuccessURL = config.tbank.successUrl;
+  if (config.tbank.failUrl) common.FailURL = config.tbank.failUrl;
+
+  const hasEmail = Boolean(input.email && input.email.includes('@'));
+
+  const variants: { name: string; params: Json }[] = [];
+  const push = (name: string, extra: Json): void => {
+    variants.push({ name: name, params: { ...common, ...extra } });
+  };
+
+  if (hasEmail) {
+    push('полный: чек, рекуррент, DATA', {
+      Recurrent: 'Y',
+      CustomerKey: input.customerKey,
+      DATA: { plan: input.plan, user_id: String(input.userId) },
+      Receipt: receipt(input.email, input.description, input.amount),
+    });
+  }
+  push('без чека', {
     Recurrent: 'Y',
     CustomerKey: input.customerKey,
-    NotificationURL: notificationUrl(),
     DATA: { plan: input.plan, user_id: String(input.userId) },
-  };
-  if (config.tbank.successUrl) params.SuccessURL = config.tbank.successUrl;
-  if (config.tbank.failUrl) params.FailURL = config.tbank.failUrl;
-  if (input.email) params.Receipt = receipt(input.email, input.description, input.amount);
-  const data = await call('Init', params);
-  if (typeof data.PaymentURL !== 'string' || typeof data.PaymentId !== 'string') {
-    throw new TbankError('BAD_RESPONSE', 'Т-Банк не вернул ссылку на оплату');
+  });
+  push('без чека и рекуррента', {
+    CustomerKey: input.customerKey,
+    DATA: { plan: input.plan, user_id: String(input.userId) },
+  });
+  push('минимальный', {});
+
+  let lastError: TbankError | null = null;
+  for (const variant of variants) {
+    try {
+      const data = await call('Init', variant.params);
+      if (typeof data.PaymentURL !== 'string' || typeof data.PaymentId !== 'string') {
+        throw new TbankError('BAD_RESPONSE', 'Т-Банк не вернул ссылку на оплату');
+      }
+      return { paymentUrl: data.PaymentURL, paymentId: data.PaymentId, variant: variant.name };
+    } catch (err) {
+      lastError = err instanceof TbankError ? err : new TbankError('FAILED', (err as Error).message);
+      // 204 — «неверные параметры»: пробуем более простой набор.
+      // Остальные коды (ключи, терминал) повтором не лечатся.
+      if (lastError.code !== '204') throw lastError;
+    }
   }
-  return { paymentUrl: data.PaymentURL, paymentId: data.PaymentId };
+  throw lastError ?? new TbankError('FAILED', 'Init не удался');
 }
 
 export const notificationUrl = (): string => tbankNotificationUrl();

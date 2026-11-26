@@ -149,12 +149,16 @@ export async function paymentsAuthRoutes(app: FastifyInstance): Promise<void> {
         userId: userId,
       });
       await query('UPDATE payments SET payment_id = $2 WHERE id = $1', [rowId, init.paymentId]);
+      req.log.info('[billing] Init прошёл, вариант параметров: ' + init.variant);
       return { paymentUrl: init.paymentUrl, orderId: oid };
     } catch (err) {
       await query("UPDATE payments SET status = 'failed' WHERE id = $1", [rowId]);
+      const bankResponse = (err as { response?: unknown }).response;
       req.log.error(
-        { err: err, orderId: oid, userId: userId, plan: plan, amount: amount },
-        '[billing] Init в Т-Банке не прошёл — платёж не создан',
+        { err: err, orderId: oid, userId: userId, plan: plan, amount: amount, bankResponse: bankResponse },
+        '[billing] Init в Т-Банке не прошёл — платёж не создан. Ответ банка: ' +
+          ((err as Error).message || 'нет') +
+          (bankResponse ? ' | ' + JSON.stringify(bankResponse) : ''),
       );
       return reply.code(502).send({
         error: 'INIT_FAILED',

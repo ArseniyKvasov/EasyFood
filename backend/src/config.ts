@@ -210,6 +210,17 @@ export const billingIssues = (): string[] => {
   const issues: string[] = [];
   if (!config.tbank.terminalKey) issues.push('TBANK_TERMINAL_KEY не задан');
   if (!config.tbank.password) issues.push('TBANK_PASSWORD не задан');
+  // Значение с пробелом — почти всегда прилипший комментарий из .env:
+  // dotenv и docker compose такие строки режут по-разному.
+  if (/\s/.test(config.tbank.terminalKey)) {
+    issues.push('TBANK_TERMINAL_KEY содержит пробел — уберите комментарий в конце строки .env');
+  }
+  if (/\s/.test(config.tbank.password)) {
+    issues.push('TBANK_PASSWORD содержит пробел — уберите комментарий в конце строки .env');
+  }
+  if (config.tbank.password.startsWith('#')) {
+    issues.push('TBANK_PASSWORD начинается с # — заключите значение в кавычки');
+  }
   if (!config.tbank.siteUrl && !config.tbank.notificationUrl) {
     issues.push('не задан SITE_URL (или TBANK_NOTIFICATION_URL) — банку некуда отправлять вебхук');
   }
