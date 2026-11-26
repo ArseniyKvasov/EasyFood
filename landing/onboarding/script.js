@@ -653,9 +653,9 @@
   };
 
   var PAY_COPY = {
-    quota: { title: 'Фото на этот месяц закончились', sub: '' },
+    quota: { title: 'Распознавания на этот месяц закончились', sub: '' },
     feature: { title: 'Экспорт доступен в Plus', sub: 'Выгрузите дневник в CSV или PDF, чтобы показать врачу или диетологу' },
-    plan: { title: 'Plus для полного дневника', sub: 'Фото без лимита, история без обрезки и отчёты по неделям' }
+    plan: { title: 'Plus для полного дневника', sub: 'Распознавание без лимита, история без обрезки и отчёты по неделям' }
   };
 
   function fmtDate(d) {
@@ -673,7 +673,7 @@
     el.planName.textContent = plus ? 'Plus' : 'Free';
     el.planDesc.textContent = plus
       ? 'Активен до ' + fmtDate(S.plusUntil)
-      : 'Фото: ' + S.photosUsed + ' из ' + S.photoQuota + ' · история 60 дней';
+      : 'Распознавания: ' + S.photosUsed + ' из ' + S.photoQuota + ' · история 60 дней';
     el.planCta.textContent = plus ? 'Управлять подпиской' : 'Оформить Plus';
     el.exportValue.innerHTML = plus ? 'Скачать &#8250;' : 'Plus &#8250;';
     el.exportValue.classList.toggle('is-locked', !plus);
@@ -740,7 +740,7 @@
       '<h2 class="paytitle" id="payTitle">' + PAY_COPY[PAY.mode].title + '</h2>' +
       '<p class="paysub" id="paySub"></p>' +
       '<ul class="paylist">' +
-        '<li>Фото без лимита</li>' +
+        '<li>Распознавание блюд без лимита</li>' +
         '<li>История без обрезки</li>' +
         '<li>Тренды и отчёты по неделям</li>' +
         '<li>Экспорт CSV и PDF для врача</li>' +
@@ -777,7 +777,7 @@
       $('#payDoneBtn').addEventListener('click', function () {
         closePaywall();
         renderDiary();
-        toast('Plus активен: фото без лимита');
+        toast('Plus активен: распознавание без лимита');
       });
     }, 1500);
   }

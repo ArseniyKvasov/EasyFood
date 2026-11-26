@@ -44,7 +44,9 @@ export async function recognizeRoutes(app: FastifyInstance): Promise<void> {
     if (quota.used >= quota.limit) {
       return reply.code(402).send({
         error: 'QUOTA_EXCEEDED',
-        message: quota.plus ? 'Дневной лимит распознаваний исчерпан. Попробуйте завтра.' : 'Бесплатные распознавания на месяц закончились. Plus — безлимит почти.',
+        message: quota.plus
+          ? 'Дневной лимит распознаваний блюд исчерпан. Попробуйте завтра.'
+          : 'Бесплатные распознавания блюд на этот месяц закончились. С Plus - до 50 в день.',
         quota: quota,
       });
     }
@@ -90,7 +92,9 @@ export async function recognizeRoutes(app: FastifyInstance): Promise<void> {
     if (quota.used >= quota.limit) {
       return reply.code(402).send({
         error: 'QUOTA_EXCEEDED',
-        message: quota.plus ? 'Дневной лимит распознаваний исчерпан. Попробуйте завтра.' : 'Бесплатные распознавания на месяц закончились. Plus — безлимит почти.',
+        message: quota.plus
+          ? 'Дневной лимит распознаваний блюд исчерпан. Попробуйте завтра.'
+          : 'Бесплатные распознавания блюд на этот месяц закончились. С Plus - до 50 в день.',
         quota: quota,
       });
     }
