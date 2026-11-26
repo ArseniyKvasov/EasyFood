@@ -10,9 +10,6 @@ type Props = { mode: PaywallMode };
 
 type Plan = 'month' | 'year';
 
-/** Контакт для отмены подписки и возврата - требование банка-эквайера. */
-const SUPPORT_EMAIL = 'arsenijtam@gmail.com';
-
 const rub = (kopecks: number): string => (kopecks / 100).toLocaleString('ru-RU') + ' \u20BD';
 
 const TITLES: Record<PaywallMode, string> = {
@@ -23,7 +20,7 @@ const TITLES: Record<PaywallMode, string> = {
 
 const DESCS: Record<PaywallMode, string> = {
   quota: 'Бесплатные распознавания блюд на этот период закончились. С Plus - до 50 в день.',
-  feature: 'Эта возможность доступна только с подпиской Plus.',
+  feature: '',
   plan: 'Больше фото, история без срока - и поддержка развития сервиса.',
 };
 
@@ -56,11 +53,7 @@ export function PaywallSheet({ mode }: Props) {
   }, []);
 
   const prices = status ? status.prices : { month: 29900, year: 199000 };
-  const amount = prices[plan];
   const monthly = Math.round(prices.year / 12 / 100) * 100;
-  // Периодичность и сумма - прямо у кнопки: требование эквайринга.
-  const periodLabel = plan === 'year' ? 'раз в 12 месяцев' : 'раз в месяц';
-  const consentLabel = plan === 'year' ? 'каждые 12 месяцев' : 'каждый месяц';
 
   const buy = function () {
     if (!consent) return;
@@ -80,7 +73,7 @@ export function PaywallSheet({ mode }: Props) {
   return (
     <div className="paywall">
       <h3 className="paywall__title">{TITLES[mode]}</h3>
-      <p className="paywall__desc">{DESCS[mode]}</p>
+      {DESCS[mode] && <p className="paywall__desc">{DESCS[mode]}</p>}
       <ul className="paywall__list">
         {PERKS.map(function (perk) {
           return (
@@ -133,8 +126,11 @@ export function PaywallSheet({ mode }: Props) {
           }}
         />
         <span>
-          Согласен на автоматические списания <b>{rub(amount)}</b> {consentLabel} до отмены подписки.
-          Первое списание - {rub(amount)} сразу после оплаты.
+          Согласен на автоматическое продление согласно условиям{' '}
+          <a href="/legal/offer.html" target="_blank" rel="noreferrer">
+            оферты
+          </a>
+          .
         </span>
       </label>
 
@@ -144,17 +140,10 @@ export function PaywallSheet({ mode }: Props) {
         disabled={!consent || busy !== null}
         onClick={buy}
       >
-        {busy ? 'Открываем банк…' : 'Оплатить ' + rub(amount) + ' ' + periodLabel}
+        {busy ? 'Открываем банк…' : 'Оформить подписку'}
       </button>
 
-      <p className="paywall__legal">
-        Отменить подписку можно в настройках приложения или письмом на{' '}
-        <a href={'mailto:' + SUPPORT_EMAIL}>{SUPPORT_EMAIL}</a>. Возврат - по{' '}
-        <a href="/legal/offer.html" target="_blank" rel="noreferrer">
-          оферте
-        </a>
-        .
-      </p>
+      <p className="paywall__legal">Отменить подписку можно в настройках</p>
     </div>
   );
 }
