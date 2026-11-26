@@ -186,6 +186,16 @@ curl -s -b "bb_session=<токен админа>" https://<домен>/api/admin
 
   `HTTP 4xx` — сеть в порядке, дело в ключах; `ERR ...` — сеть или DNS.
 
+  Если `securepay.tinkoff.ru` из контейнера не резолвится, у Т-Банка есть зеркало —
+  задайте `TBANK_BASE_URL=https://securepay.tbank.ru/v2`.
+
+Всё это одной командой проверяет `deploy/check-billing.sh` (работает из любой папки,
+ничего не меняет): переменные в контейнере, DNS, HTTPS до банка и health приложения.
+
+```bash
+./deploy/check-billing.sh
+```
+
 ## Локальная разработка
 
 ```bash
