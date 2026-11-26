@@ -655,7 +655,7 @@
   var PAY_COPY = {
     quota: { title: 'Распознавания на этот месяц закончились', sub: '' },
     feature: { title: 'Экспорт доступен в Plus', sub: 'Выгрузите дневник в CSV или PDF, чтобы показать врачу или диетологу' },
-    plan: { title: 'Plus для полного дневника', sub: 'Распознавание без лимита, история без обрезки и отчёты по неделям' }
+    plan: { title: 'Plus для полного дневника', sub: 'Распознавание без лимита, история без обрезки и отчёты' }
   };
 
   function fmtDate(d) {
@@ -742,7 +742,7 @@
       '<ul class="paylist">' +
         '<li>Распознавание блюд без лимита</li>' +
         '<li>История без обрезки</li>' +
-        '<li>Тренды и отчёты по неделям</li>' +
+        '<li>Тренды и отчёты за 30-90 дней</li>' +
         '<li>Экспорт CSV и PDF для врача</li>' +
       '</ul>' +
       '<div class="paytoggle" id="payToggle">' +
@@ -928,7 +928,7 @@
   });
 
   el.remAdd.addEventListener('click', function () {
-    if (S.reminders.length >= REM_LIMIT) { toast('На Free до трёх напоминаний'); return; }
+    if (S.reminders.length >= REM_LIMIT) { toast('В прототипе - не больше трёх напоминаний'); return; }
     S.reminders.push({ id: 'c' + Date.now(), label: 'Своё', time: '15:00', on: true, custom: true });
     renderReminders();
   });
