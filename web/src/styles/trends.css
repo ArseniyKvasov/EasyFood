@@ -1,0 +1,220 @@
+/* ---------- Тренды (Plus) ---------- */
+.tr { display: grid; gap: 0.9rem; padding-bottom: 0.5rem; }
+/* График на 90 дней шире экрана: он скроллится внутри карточки, а не тянет сетку */
+.tr > * { min-width: 0; }
+.tr__card, .tr__card-head { min-width: 0; }
+
+.segmented--sm {
+  margin: 0 0 0.75rem;
+  padding: 0.2rem;
+  border-radius: var(--r-sm);
+}
+.segmented--sm .nav-link {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 8px;
+}
+
+.tr__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.55rem;
+}
+.tr__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.8rem 0.5rem;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  text-align: center;
+}
+.tr__stat-value {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: 1.3rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: var(--text);
+}
+.tr__stat-value small {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0;
+}
+.tr__stat-label {
+  font-size: 0.7rem;
+  line-height: 1.25;
+  color: var(--muted);
+}
+
+.tr__card {
+  padding: 0.9rem 0.9rem 0.6rem;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xs);
+}
+.tr__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.tr__card-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tr__chart { margin: 0 -0.1rem; }
+.tr__card--tight { padding-bottom: 0.9rem; }
+.tr__chart-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.tr__chart svg { display: block; }
+.tr__grid { stroke: var(--line); stroke-width: 1; }
+.tr__axis { stroke: var(--line-2); stroke-width: 1; }
+.tr__target {
+  stroke: var(--accent);
+  stroke-width: 1.4;
+  stroke-dasharray: 5 4;
+  opacity: 0.8;
+}
+.tr__target-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  fill: var(--accent-ink);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.tr__bar { fill: var(--accent); opacity: 0.9; }
+.tr__bar--over { fill: #e8735a; opacity: 0.95; }
+.tr__bar-empty { fill: var(--surface-3); }
+.tr__tick {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 8.5px;
+  fill: var(--muted);
+}
+.tr__legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0.2rem;
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+.tr__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.tr__dot--over { background: #e8735a; }
+
+.tr__macros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin-top: 0.55rem;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.tr__macros b { color: var(--text); font-weight: 700; }
+
+.tr__actions { display: grid; gap: 0.5rem; }
+.tr__action {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  transition: border-color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
+}
+.tr__action:hover { border-color: var(--accent); background-color: var(--accent-soft); }
+.tr__action:disabled { opacity: 0.6; }
+.tr__action-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  background-color: var(--surface-2);
+  color: var(--accent-ink);
+}
+.tr__action-text { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+.tr__action-text b { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+.tr__action-text small { font-size: 0.75rem; color: var(--muted); }
+
+.tr__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  padding: 2rem 1rem;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+}
+.tr__empty-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-full);
+  display: grid;
+  place-items: center;
+  background-color: var(--accent-soft);
+  color: var(--accent-ink);
+  margin-bottom: 0.35rem;
+}
+.tr__empty-title { margin: 0; font-weight: 700; font-size: 0.95rem; color: var(--text); }
+.tr__empty-text { margin: 0; max-width: 30ch; font-size: 0.82rem; color: var(--muted); }
+
+.tr__skeleton { display: grid; gap: 0.9rem; }
+.tr__skeleton-card {
+  height: 220px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(100deg, var(--surface-2) 30%, var(--surface-3) 50%, var(--surface-2) 70%);
+  background-size: 200% 100%;
+  animation: trShimmer 1.4s linear infinite;
+}
+.tr__skeleton-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
+.tr__skeleton-stat {
+  height: 72px;
+  border-radius: var(--r);
+  background: linear-gradient(100deg, var(--surface-2) 30%, var(--surface-3) 50%, var(--surface-2) 70%);
+  background-size: 200% 100%;
+  animation: trShimmer 1.4s linear infinite;
+}
+@keyframes trShimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tr__skeleton-card, .tr__skeleton-stat { animation: none; }
+}
+.tr__avg { fill: none; stroke: var(--text); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; }
+.tr__avg-dot { fill: var(--text); opacity: 0.7; }
+.tr__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+  margin: 0.45rem 0 0.15rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.tr__legend > span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.tr__line-key { width: 12px; height: 2px; border-radius: 2px; background: var(--text); opacity: 0.55; }
+.tr__norm {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0.35rem;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-ink);
+}
+.tr__dash { width: 14px; height: 0; border-top: 1.5px dashed var(--accent); opacity: 0.8; }

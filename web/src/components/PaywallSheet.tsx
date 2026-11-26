@@ -1,12 +1,11 @@
 
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
+import { IconCheck } from './Icons';
 
 export type PaywallMode = 'quota' | 'feature' | 'plan';
 
 type Props = { mode: PaywallMode };
-
-const SUPPORT_EMAIL = 'arsenijtam@gmail.com';
 
 const rub = (kopecks: number): string => (kopecks / 100).toLocaleString('ru-RU') + ' \u20BD';
 
@@ -21,6 +20,12 @@ const DESCS: Record<PaywallMode, string> = {
   feature: 'Эта возможность доступна только с подпиской Plus.',
   plan: 'Больше фото, история без срока — и поддержка развития сервиса.',
 };
+
+const PERKS: string[] = [
+  'До 50 распознаваний по фото в день',
+  'История дневника без ограничения 60 дней',
+  'Отмена в один клик, доступ — до конца оплаченного периода',
+];
 
 export function PaywallSheet({ mode }: Props) {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof api.billingStatus>> | null>(null);
@@ -61,31 +66,40 @@ export function PaywallSheet({ mode }: Props) {
 
   return (
     <div className="paywall">
-      <h3 className="mb-1">{TITLES[mode]}</h3>
-      <p className="text-muted">{DESCS[mode]}</p>
+      <p className="bb-label">BiteBalance Plus</p>
+      <h3 className="paywall__title">{TITLES[mode]}</h3>
+      <p className="paywall__desc">{DESCS[mode]}</p>
       <ul className="paywall__list">
-        <li>До 50 распознаваний по фото в день</li>
-        <li>История дневника без ограничения 60 дней</li>
-        <li>Отмена в один клик, доступ — до конца оплаченного периода</li>
+        {PERKS.map(function (perk) {
+          return (
+            <li key={perk}>
+              <span className="paywall__check" aria-hidden="true">
+                <IconCheck size={15} />
+              </span>
+              {perk}
+            </li>
+          );
+        })}
       </ul>
       {status && status.plus && (
-        <div className="alert alert-success">Plus уже активен — приятного аппетита.</div>
+        <p className="paywall__active">Plus уже активен — приятного аппетита.</p>
       )}
       {error && <div className="alert alert-danger">{error}</div>}
       <div className="d-grid gap-2">
         <button
           type="button"
-          className="btn btn-primary btn-lg"
+          className="btn btn-primary btn-lg w-100 paywall__cta"
           disabled={busy !== null}
           onClick={function () {
             void buy('year');
           }}
         >
-          {busy === 'year' ? 'Открываем банк…' : 'Год · ' + rub(year) + ' (≈' + Math.round(year / 12 / 100) + ' \u20BD/мес)'}
+          <span>Год · {rub(year)}</span>
+          <small>≈{Math.round(year / 12 / 100)} ₽/мес · выгодно</small>
         </button>
         <button
           type="button"
-          className="btn btn-outline-primary btn-lg"
+          className="btn btn-outline-secondary btn-lg w-100"
           disabled={busy !== null}
           onClick={function () {
             void buy('month');
@@ -94,14 +108,7 @@ export function PaywallSheet({ mode }: Props) {
           {busy === 'month' ? 'Открываем банк…' : 'Месяц · ' + rub(month)}
         </button>
       </div>
-      <p className="hint mt-3 mb-0">
-        Оплата через Т-Банк, автопродление. За 3 дня до списания предупредим письмом и push.
-        Условия — в{' '}
-        <a href="/legal/offer.html" target="_blank" rel="noreferrer">
-          оферте
-        </a>
-        , вопросы — на {SUPPORT_EMAIL}.
-      </p>
+      {busy === 'year' && <p className="hint mt-2 mb-0">Открываем банк…</p>}
     </div>
   );
 }

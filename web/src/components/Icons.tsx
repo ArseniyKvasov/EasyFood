@@ -183,6 +183,22 @@ export const IconAndroid = ({ size = 18, ...p }: IconProps) => (
   </svg>
 );
 
+export const IconDownload = ({ size = 17, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M12 3v11" />
+    <path d="m7.5 10 4.5 4.5 4.5-4.5" />
+    <path d="M4 17.5V19a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-1.5" />
+  </svg>
+);
+
+export const IconPrint = ({ size = 17, ...p }: IconProps) => (
+  <svg {...base(size)} {...p}>
+    <path d="M7 8V4h10v4" />
+    <rect x="4" y="8" width="16" height="8" rx="2" />
+    <path d="M7 14h10v6H7z" />
+  </svg>
+);
+
 export const IconChart = ({ size = 19, ...p }: IconProps) => (
   <svg {...base(size)} {...p}>
     <path d="M3 3v16a2 2 0 0 0 2 2h16" />
