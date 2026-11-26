@@ -35,6 +35,20 @@ const GoalIcon = ({ goal }: { goal: Goal }) => (
 );
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+/** Значение поля после потери фокуса: пусто или не число — пусто, иначе обрезаем по максимуму. */
+const trimInput = (raw: string, max: number): string => {
+  const v = Number(String(raw).replace(',', '.'));
+  if (!Number.isFinite(v) || v <= 0) return '';
+  return String(Math.min(v, max));
+};
+
+/** Пустое или нелепое значение — null: верхнего предела достаточно. */
+const numOrNull = (raw: string, max: number): number | null => {
+  const v = Number(String(raw).replace(',', '.'));
+  if (!Number.isFinite(v) || v <= 0) return null;
+  return Math.min(v, max);
+};
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU');
 
 type Props = {
@@ -50,25 +64,33 @@ export function Onboarding({ onDone }: Props) {
   const [step, setStep] = useState(1);
   const [goal, setGoal] = useState<Goal | null>(null);
   const [sex, setSex] = useState<Sex>('f');
-  const [age, setAge] = useState(29);
-  const [height, setHeight] = useState(168);
-  const [weight, setWeight] = useState(62);
+  // Поля хранятся строками: пустая строка — это «не заполнено», а не ноль.
+  // Иначе очистка поля превращалась в минимальное значение.
+  const [age, setAge] = useState('');
+  const [height, setHeight] = useState('');
+  const [weight, setWeight] = useState('');
   const [activity, setActivity] = useState(1.375);
   const [manual, setManual] = useState<OnboardingTargets | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const computed = useMemo<OnboardingTargets>(() => {
-    const bmr = 10 * weight + 6.25 * height - 5 * age + (sex === 'm' ? 5 : -161);
+  const ageNum = numOrNull(age, 120);
+  const heightNum = numOrNull(height, 220);
+  const weightNum = numOrNull(weight, 250);
+  const complete = ageNum !== null && heightNum !== null && weightNum !== null;
+
+  const computed = useMemo<OnboardingTargets | null>(() => {
+    if (ageNum === null || heightNum === null || weightNum === null) return null;
+    const bmr = 10 * weightNum + 6.25 * heightNum - 5 * ageNum + (sex === 'm' ? 5 : -161);
     const tdee = bmr * activity;
     const factor = goal === 'lose' ? 0.85 : goal === 'gain' ? 1.1 : 1;
     const min = sex === 'm' ? 1500 : 1200;
     const kcal = Math.max(min, Math.round((tdee * factor) / 10) * 10);
-    const protein = Math.round(weight * 1.7);
-    const fat = Math.round(weight * 0.9);
+    const protein = Math.round(weightNum * 1.7);
+    const fat = Math.round(weightNum * 0.9);
     const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
     return { kcal, protein, fat, carbs };
-  }, [weight, height, age, sex, activity, goal]);
+  }, [ageNum, heightNum, weightNum, sex, activity, goal]);
 
   const norm = manual ?? computed;
 
@@ -78,10 +100,12 @@ export function Onboarding({ onDone }: Props) {
       return;
     }
     if (step === 2) {
+      if (!complete) return;
       setManual(null);
       setStep(3);
       return;
     }
+    if (!norm) return;
     setBusy(true);
     try {
       await onDone(norm);
@@ -96,6 +120,7 @@ export function Onboarding({ onDone }: Props) {
   };
 
   const editManual = (patch: Partial<OnboardingTargets>) => {
+    if (!norm) return;
     const nextValue = { ...norm, ...patch };
     setManual({
       kcal: clamp(nextValue.kcal, 800, 6000),
@@ -156,16 +181,18 @@ export function Onboarding({ onDone }: Props) {
                 <label className="onb__field">
                   <span>Возраст</span>
                   <input
-                    type="number" inputMode="numeric" min={14} max={90} value={age}
-                    onChange={(e) => setAge(clamp(Number(e.target.value) || 0, 14, 90))}
+                    type="number" inputMode="numeric" max={120} placeholder="29" value={age}
+                    onChange={(e) => setAge(e.target.value)}
+                    onBlur={() => setAge(trimInput(age, 120))}
                   />
                   <i>лет</i>
                 </label>
                 <label className="onb__field">
                   <span>Рост</span>
                   <input
-                    type="number" inputMode="numeric" min={120} max={220} value={height}
-                    onChange={(e) => setHeight(clamp(Number(e.target.value) || 0, 120, 220))}
+                    type="number" inputMode="numeric" max={220} placeholder="168" value={height}
+                    onChange={(e) => setHeight(e.target.value)}
+                    onBlur={() => setHeight(trimInput(height, 220))}
                   />
                   <i>см</i>
                 </label>
@@ -174,8 +201,9 @@ export function Onboarding({ onDone }: Props) {
               <label className="onb__field">
                 <span>Вес</span>
                 <input
-                  type="number" inputMode="numeric" min={30} max={250} value={weight}
-                  onChange={(e) => setWeight(clamp(Number(e.target.value) || 0, 30, 250))}
+                  type="number" inputMode="numeric" max={250} placeholder="62" value={weight}
+                  onChange={(e) => setWeight(e.target.value)}
+                  onBlur={() => setWeight(trimInput(weight, 250))}
                 />
                 <i>кг</i>
               </label>
@@ -196,12 +224,12 @@ export function Onboarding({ onDone }: Props) {
 
               <div className="onb__preview">
                 <span>Ваша норма</span>
-                <b>{fmt(computed.kcal)} ккал</b>
+                <b>{computed ? fmt(computed.kcal) + ' ккал' : 'заполните поля выше'}</b>
               </div>
             </>
           )}
 
-          {step === 3 && (
+          {step === 3 && norm && (
             <>
               <h2 className="onb__title" id="onb-title">Проверьте норму</h2>
               <p className="onb__hint">Если цифра не нравится, поправьте вручную</p>
@@ -275,7 +303,7 @@ export function Onboarding({ onDone }: Props) {
             type="button"
             className="btn btn-primary flex-grow-1"
             onClick={() => void next()}
-            disabled={busy || (step === 1 && !goal)}
+            disabled={busy || (step === 1 && !goal) || (step === 2 && !complete)}
           >
             {step === 3 ? (busy ? 'Сохраняем…' : 'Готово') : 'Дальше'}
           </button>
