@@ -164,8 +164,9 @@ export const api = {
       tbank: boolean;
     }>('/api/billing/status'),
 
-  checkout: (plan: 'month' | 'year') =>
-    request<{ paymentUrl: string; orderId: string }>('/api/checkout', json({ plan })),
+  /** consent - подтверждение автоплатежей, которое поставил покупатель. */
+  checkout: (plan: 'month' | 'year', consent = false) =>
+    request<{ paymentUrl: string; orderId: string }>('/api/checkout', json({ plan, consent })),
 
   cancelSubscription: () =>
     request<{ ok: true; current_end: string | null }>('/api/billing/cancel', {

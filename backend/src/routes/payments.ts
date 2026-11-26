@@ -22,7 +22,11 @@ import { getState, initPayment, verifyWebhook } from '../services/tbank.js';
  * до authHook, как /api/auth/*), остальное — только с сессией.
  */
 
-const checkoutBody = z.object({ plan: z.enum(['month', 'year']) });
+const checkoutBody = z.object({
+  plan: z.enum(['month', 'year']),
+  /** Согласие покупателя на автоматические списания: ставится чек-боксом. */
+  consent: z.boolean().optional(),
+});
 
 type PaymentRow = {
   id: string;
@@ -132,9 +136,17 @@ export async function paymentsAuthRoutes(app: FastifyInstance): Promise<void> {
     }
     const amount = planPrice(plan);
     const oid = orderId(userId);
+    // Согласие фиксируем вместе с платежом: при споре с банком видно,
+    // что покупатель подтвердил автоплатежи до оплаты.
+    const consentRecord = {
+      consent: parsed.data.consent === true,
+      at: new Date().toISOString(),
+      amount: amount,
+      plan: plan,
+    };
     const created = await query<{ id: string }>(
-      "INSERT INTO payments (user_id, order_id, amount, plan, kind, status) VALUES ($1, $2, $3, $4, 'initial', 'pending') RETURNING id::text AS id",
-      [userId, oid, amount, plan],
+      "INSERT INTO payments (user_id, order_id, amount, plan, kind, status, raw) VALUES ($1, $2, $3, $4, 'initial', 'pending', $5::jsonb) RETURNING id::text AS id",
+      [userId, oid, amount, plan, JSON.stringify(consentRecord)],
     );
     const rowId = created.length ? created[0].id : null;
     const me = await one<{ email: string }>('SELECT email FROM users WHERE id = $1', [userId]);

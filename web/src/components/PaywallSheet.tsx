@@ -2,10 +2,16 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api';
 import { IconCheck } from './Icons';
+import '../styles/paywall.css';
 
 export type PaywallMode = 'quota' | 'feature' | 'plan';
 
 type Props = { mode: PaywallMode };
+
+type Plan = 'month' | 'year';
+
+/** Контакт для отмены подписки и возврата - требование банка-эквайера. */
+const SUPPORT_EMAIL = 'arsenijtam@gmail.com';
 
 const rub = (kopecks: number): string => (kopecks / 100).toLocaleString('ru-RU') + ' \u20BD';
 
@@ -29,7 +35,9 @@ const PERKS: string[] = [
 
 export function PaywallSheet({ mode }: Props) {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof api.billingStatus>> | null>(null);
-  const [busy, setBusy] = useState<'month' | 'year' | null>(null);
+  const [plan, setPlan] = useState<Plan>('year');
+  const [consent, setConsent] = useState(false);
+  const [busy, setBusy] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(function () {
@@ -47,11 +55,19 @@ export function PaywallSheet({ mode }: Props) {
     };
   }, []);
 
-  const buy = function (plan: 'month' | 'year') {
+  const prices = status ? status.prices : { month: 29900, year: 199000 };
+  const amount = prices[plan];
+  const monthly = Math.round(prices.year / 12 / 100) * 100;
+  // Периодичность и сумма - прямо у кнопки: требование эквайринга.
+  const periodLabel = plan === 'year' ? 'раз в 12 месяцев' : 'раз в месяц';
+  const consentLabel = plan === 'year' ? 'каждые 12 месяцев' : 'каждый месяц';
+
+  const buy = function () {
+    if (!consent) return;
     setBusy(plan);
     setError(null);
     api
-      .checkout(plan)
+      .checkout(plan, true)
       .then(function (r) {
         window.location.href = r.paymentUrl;
       })
@@ -60,9 +76,6 @@ export function PaywallSheet({ mode }: Props) {
         setError(err instanceof ApiError ? err.message : 'Не удалось создать платёж.');
       });
   };
-
-  const month = status ? status.prices.month : 29900;
-  const year = status ? status.prices.year : 199000;
 
   return (
     <div className="paywall">
@@ -80,34 +93,68 @@ export function PaywallSheet({ mode }: Props) {
           );
         })}
       </ul>
-      {status && status.plus && (
-        <p className="paywall__active">Plus уже активен - приятного аппетита.</p>
-      )}
+
+      {status && status.plus && <p className="paywall__active">Plus уже активен - приятного аппетита.</p>}
       {error && <div className="alert alert-danger">{error}</div>}
-      <div className="d-grid gap-2">
-        <button
-          type="button"
-          className="btn btn-primary btn-lg w-100 paywall__cta"
-          disabled={busy !== null}
-          onClick={function () {
-            void buy('year');
-          }}
-        >
-          <span>Год · {rub(year)}</span>
-          <small>≈{Math.round(year / 12 / 100)} ₽/мес · выгодно</small>
-        </button>
-        <button
-          type="button"
-          className="btn btn-outline-secondary btn-lg w-100"
-          disabled={busy !== null}
-          onClick={function () {
-            void buy('month');
-          }}
-        >
-          {busy === 'month' ? 'Открываем банк…' : 'Месяц · ' + rub(month)}
-        </button>
+
+      <div className="paywall__plans" role="radiogroup" aria-label="Тариф подписки">
+        {(['year', 'month'] as Plan[]).map(function (p) {
+          const active = plan === p;
+          return (
+            <button
+              key={p}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              className={'paywall__plan' + (active ? ' is-on' : '')}
+              onClick={function () {
+                setPlan(p);
+              }}
+            >
+              <span className="paywall__plan-head">
+                <b>{p === 'year' ? 'Год' : 'Месяц'}</b>
+                {p === 'year' && <span className="paywall__plan-badge">выгодно</span>}
+              </span>
+              <span className="paywall__plan-price">{rub(prices[p])}</span>
+              <span className="paywall__plan-note">
+                {p === 'year' ? 'раз в 12 месяцев · ' + rub(monthly) + ' в месяц' : 'раз в месяц'}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      {busy === 'year' && <p className="hint mt-2 mb-0">Открываем банк…</p>}
+
+      <label className="paywall__consent">
+        <input
+          type="checkbox"
+          checked={consent}
+          onChange={function (e) {
+            setConsent(e.target.checked);
+          }}
+        />
+        <span>
+          Согласен на автоматические списания <b>{rub(amount)}</b> {consentLabel} до отмены подписки.
+          Первое списание - {rub(amount)} сразу после оплаты.
+        </span>
+      </label>
+
+      <button
+        type="button"
+        className="btn btn-primary btn-lg w-100"
+        disabled={!consent || busy !== null}
+        onClick={buy}
+      >
+        {busy ? 'Открываем банк…' : 'Оплатить ' + rub(amount) + ' ' + periodLabel}
+      </button>
+
+      <p className="paywall__legal">
+        Отменить подписку можно в настройках приложения или письмом на{' '}
+        <a href={'mailto:' + SUPPORT_EMAIL}>{SUPPORT_EMAIL}</a>. Возврат - по{' '}
+        <a href="/legal/offer.html" target="_blank" rel="noreferrer">
+          оферте
+        </a>
+        .
+      </p>
     </div>
   );
 }
